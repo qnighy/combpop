@@ -1,11 +1,17 @@
 use {LookaheadParser, ParseResult, Parser, Stream};
 
+pub fn any_token() -> AnyToken {
+    AnyToken
+}
+
 pub struct AnyToken;
+
 impl<S: Stream> Parser<S::Item, S> for AnyToken {
     fn parse(&mut self, stream: &mut S) -> ParseResult<S::Item> {
         stream.next()
     }
 }
+
 impl<S: Stream> LookaheadParser<S::Item, S> for AnyToken {
     fn parse_lookahead<Alt>(&mut self, stream: &mut S, alt: &mut Alt) -> ParseResult<S::Item>
     where
@@ -35,7 +41,12 @@ impl<S: Stream> LookaheadParser<S::Item, S> for AnyToken {
     }
 }
 
+pub fn concat<P0, P1>(p0: P0, p1: P1) -> Concat<P0, P1> {
+    Concat(p0, p1)
+}
+
 pub struct Concat<P0, P1>(P0, P1);
+
 impl<X0, X1, P0, P1, S: Stream> Parser<(X0, X1), S> for Concat<P0, P1>
 where
     P0: Parser<X0, S>,
