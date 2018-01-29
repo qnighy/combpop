@@ -31,11 +31,7 @@ pub trait LookaheadParser<O, S: Stream>: Parser<O, S> {
     where
         Alt: Parser<O, S> + ?Sized,
         Self: Sized;
-    fn parse_lookahead_dyn<Alt>(
-        &mut self,
-        stream: &mut S,
-        alt: &mut Parser<O, S>,
-    ) -> ParseResult<O>;
+    fn parse_lookahead_dyn(&mut self, stream: &mut S, alt: &mut Parser<O, S>) -> ParseResult<O>;
 }
 
 pub struct Token;
@@ -64,7 +60,7 @@ impl<S: Stream> LookaheadParser<S::Item, S> for Token {
             },
         }
     }
-    fn parse_lookahead_dyn<Alt>(
+    fn parse_lookahead_dyn(
         &mut self,
         stream: &mut S,
         alt: &mut Parser<S::Item, S>,
