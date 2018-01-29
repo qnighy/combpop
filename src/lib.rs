@@ -13,19 +13,21 @@ impl ParseError {
     }
 }
 
+pub type ParseResult<T> = Result<T, ParseError>;
+
 pub trait Stream {
     type Item;
-    fn next(&mut self) -> Result<Self::Item, ParseError>;
+    fn next(&mut self) -> ParseResult<Self::Item>;
     fn mark(&mut self) -> u64;
     fn rollback(&mut self, pos: u64);
     fn commit(&mut self);
 }
 
 pub trait Parser<O, S: Stream> {
-    fn parse(&mut self, stream: &mut S) -> Result<O, ParseError>;
+    fn parse(&mut self, stream: &mut S) -> ParseResult<O>;
 }
 pub trait LookaheadParser<O, S: Stream>: Parser<O, S> {
-    fn parse_lookahead<Alt>(&mut self, stream: &mut S, alt: &mut Alt) -> Result<O, ParseError>
+    fn parse_lookahead<Alt>(&mut self, stream: &mut S, alt: &mut Alt) -> ParseResult<O>
     where
         Alt: Parser<O, S> + ?Sized,
         Self: Sized;
@@ -33,17 +35,17 @@ pub trait LookaheadParser<O, S: Stream>: Parser<O, S> {
         &mut self,
         stream: &mut S,
         alt: &mut Parser<O, S>,
-    ) -> Result<O, ParseError>;
+    ) -> ParseResult<O>;
 }
 
 pub struct Token;
 impl<S: Stream> Parser<S::Item, S> for Token {
-    fn parse(&mut self, stream: &mut S) -> Result<S::Item, ParseError> {
+    fn parse(&mut self, stream: &mut S) -> ParseResult<S::Item> {
         stream.next()
     }
 }
 impl<S: Stream> LookaheadParser<S::Item, S> for Token {
-    fn parse_lookahead<Alt>(&mut self, stream: &mut S, alt: &mut Alt) -> Result<S::Item, ParseError>
+    fn parse_lookahead<Alt>(&mut self, stream: &mut S, alt: &mut Alt) -> ParseResult<S::Item>
     where
         Alt: Parser<S::Item, S> + ?Sized,
     {
@@ -66,7 +68,7 @@ impl<S: Stream> LookaheadParser<S::Item, S> for Token {
         &mut self,
         stream: &mut S,
         alt: &mut Parser<S::Item, S>,
-    ) -> Result<S::Item, ParseError> {
+    ) -> ParseResult<S::Item> {
         self.parse_lookahead(stream, alt)
     }
 }
@@ -77,7 +79,7 @@ where
     P0: Parser<X0, S>,
     P1: Parser<X1, S>,
 {
-    fn parse(&mut self, stream: &mut S) -> Result<(X0, X1), ParseError> {
+    fn parse(&mut self, stream: &mut S) -> ParseResult<(X0, X1)> {
         Ok((self.0.parse(stream)?, self.1.parse(stream)?))
     }
 }
