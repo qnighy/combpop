@@ -1,4 +1,29 @@
-use {LookaheadParser, ParseResult, Parser, Stream};
+use {LookaheadParser, ParseError, ParseResult, Parser, Stream};
+
+fn parse_lookahead_all<O, S: Stream + ?Sized, P, Alt>(
+    parser: &mut P,
+    stream: &mut S,
+    alt: &mut Alt,
+) -> ParseResult<O>
+where
+    P: Parser<O, S> + ?Sized,
+    Alt: Parser<O, S> + ?Sized,
+{
+    let pos = stream.mark();
+    match parser.parse(stream) {
+        Ok(x) => {
+            stream.commit();
+            Ok(x)
+        }
+        Err(e) => if e.is_recoverable() {
+            stream.rollback(pos);
+            alt.parse(stream)
+        } else {
+            stream.commit();
+            Err(e)
+        },
+    }
+}
 
 pub fn any_token() -> AnyToken {
     AnyToken
@@ -17,20 +42,40 @@ impl<S: Stream + ?Sized> LookaheadParser<S::Item, S> for AnyToken {
     where
         Alt: Parser<S::Item, S> + ?Sized,
     {
-        let pos = stream.mark();
-        match stream.next() {
-            Ok(x) => {
-                stream.commit();
-                Ok(x)
-            }
-            Err(e) => if e.is_recoverable() {
-                stream.rollback(pos);
-                alt.parse(stream)
-            } else {
-                stream.commit();
-                Err(e)
-            },
+        parse_lookahead_all(self, stream, alt)
+    }
+    fn parse_lookahead_dyn(
+        &mut self,
+        stream: &mut S,
+        alt: &mut Parser<S::Item, S>,
+    ) -> ParseResult<S::Item> {
+        self.parse_lookahead(stream, alt)
+    }
+}
+
+pub fn token<I, F: FnMut(&I) -> bool>(f: F) -> Token<F> {
+    Token(f)
+}
+
+pub struct Token<F>(F);
+
+impl<S: Stream + ?Sized, F: FnMut(&S::Item) -> bool> Parser<S::Item, S> for Token<F> {
+    fn parse(&mut self, stream: &mut S) -> ParseResult<S::Item> {
+        let x = stream.next()?;
+        if (self.0)(&x) {
+            Ok(x)
+        } else {
+            Err(ParseError::SyntaxError)
         }
+    }
+}
+
+impl<S: Stream + ?Sized, F: FnMut(&S::Item) -> bool> LookaheadParser<S::Item, S> for Token<F> {
+    fn parse_lookahead<Alt>(&mut self, stream: &mut S, alt: &mut Alt) -> ParseResult<S::Item>
+    where
+        Alt: Parser<S::Item, S> + ?Sized,
+    {
+        parse_lookahead_all(self, stream, alt)
     }
     fn parse_lookahead_dyn(
         &mut self,
