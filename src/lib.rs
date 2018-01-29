@@ -1,0 +1,91 @@
+#[derive(Debug)]
+pub enum ParseError {
+    EOF,
+    NotReady,
+    SyntaxError,
+}
+impl ParseError {
+    pub fn is_recoverable(&self) -> bool {
+        match self {
+            &ParseError::EOF | &ParseError::SyntaxError => true,
+            &ParseError::NotReady => false,
+        }
+    }
+}
+
+pub trait Stream {
+    type Item;
+    fn next(&mut self) -> Result<Self::Item, ParseError>;
+    fn mark(&mut self) -> u64;
+    fn rollback(&mut self, pos: u64);
+    fn commit(&mut self);
+}
+
+pub trait Parser<O, S: Stream> {
+    fn parse(&mut self, stream: &mut S) -> Result<O, ParseError>;
+}
+pub trait LookaheadParser<O, S: Stream>: Parser<O, S> {
+    fn parse_lookahead<Alt>(&mut self, stream: &mut S, alt: &mut Alt) -> Result<O, ParseError>
+    where
+        Alt: Parser<O, S> + ?Sized,
+        Self: Sized;
+    fn parse_lookahead_dyn<Alt>(
+        &mut self,
+        stream: &mut S,
+        alt: &mut Parser<O, S>,
+    ) -> Result<O, ParseError>;
+}
+
+pub struct Token;
+impl<S: Stream> Parser<S::Item, S> for Token {
+    fn parse(&mut self, stream: &mut S) -> Result<S::Item, ParseError> {
+        stream.next()
+    }
+}
+impl<S: Stream> LookaheadParser<S::Item, S> for Token {
+    fn parse_lookahead<Alt>(&mut self, stream: &mut S, alt: &mut Alt) -> Result<S::Item, ParseError>
+    where
+        Alt: Parser<S::Item, S> + ?Sized,
+    {
+        let pos = stream.mark();
+        match stream.next() {
+            Ok(x) => {
+                stream.commit();
+                Ok(x)
+            }
+            Err(e) => if e.is_recoverable() {
+                stream.rollback(pos);
+                alt.parse(stream)
+            } else {
+                stream.commit();
+                Err(e)
+            },
+        }
+    }
+    fn parse_lookahead_dyn<Alt>(
+        &mut self,
+        stream: &mut S,
+        alt: &mut Parser<S::Item, S>,
+    ) -> Result<S::Item, ParseError> {
+        self.parse_lookahead(stream, alt)
+    }
+}
+
+pub struct Concat<P0, P1>(P0, P1);
+impl<X0, X1, P0, P1, S: Stream> Parser<(X0, X1), S> for Concat<P0, P1>
+where
+    P0: Parser<X0, S>,
+    P1: Parser<X1, S>,
+{
+    fn parse(&mut self, stream: &mut S) -> Result<(X0, X1), ParseError> {
+        Ok((self.0.parse(stream)?, self.1.parse(stream)?))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn it_works() {
+        assert_eq!(2 + 2, 4);
+    }
+}

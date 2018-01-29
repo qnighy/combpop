@@ -1,0 +1,14 @@
+[package]
+name = "combpop"
+description = "Type-based parser combinator"
+# documentation = ""
+homepage = "https://github.com/qnighy/combpop/"
+repository = "https://github.com/qnighy/combpop/"
+readme = "README.md"
+keywords = ["parser", "parsing", "combinators", "ll"]
+categories = ["parsing"]
+license = "Apache-2.0/MIT"
+version = "0.0.1"
+authors = ["Masaki Hara <ackie.h.gmai@gmail.com>"]
+
+[dependencies]
