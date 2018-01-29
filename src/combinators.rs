@@ -1,12 +1,12 @@
 use {LookaheadParser, ParseResult, Parser, Stream};
 
-pub struct Token;
-impl<S: Stream> Parser<S::Item, S> for Token {
+pub struct AnyToken;
+impl<S: Stream> Parser<S::Item, S> for AnyToken {
     fn parse(&mut self, stream: &mut S) -> ParseResult<S::Item> {
         stream.next()
     }
 }
-impl<S: Stream> LookaheadParser<S::Item, S> for Token {
+impl<S: Stream> LookaheadParser<S::Item, S> for AnyToken {
     fn parse_lookahead<Alt>(&mut self, stream: &mut S, alt: &mut Alt) -> ParseResult<S::Item>
     where
         Alt: Parser<S::Item, S> + ?Sized,
