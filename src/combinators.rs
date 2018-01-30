@@ -47,34 +47,77 @@ impl<I, S: Stream<Item = I> + ?Sized, F: FnMut(&I) -> bool> LookaheadParser<S> f
     }
 }
 
-pub fn concat<P0, P1>(p0: P0, p1: P1) -> Concat<P0, P1> {
-    Concat(p0, p1)
+pub fn concat<P>(p: P) -> Concat<P> {
+    Concat(p)
 }
 
-pub struct Concat<P0, P1>(P0, P1);
+pub struct Concat<P>(P);
 
-impl<I, P0, P1, S: Stream<Item = I> + ?Sized> Parser<S> for Concat<P0, P1>
-where
-    P0: Parser<S, Input = I>,
-    P1: Parser<S, Input = I>,
-{
-    type Input = I;
-    type Output = (P0::Output, P1::Output);
-    fn parse(&mut self, stream: &mut S) -> ParseResult<Self::Output> {
-        Ok((self.0.parse(stream)?, self.1.parse(stream)?))
-    }
+macro_rules! define_concat_parser {
+    ($($var:ident : $ty:ident,)*) => {
+        impl<I, $($ty,)* S: Stream<Item = I> + ?Sized> Parser<S> for Concat<($($ty,)*)>
+        where
+            $($ty: Parser<S, Input = I>,)*
+        {
+            type Input = I;
+            type Output = ($($ty::Output,)*);
+            #[allow(unused_variables)]
+            fn parse(&mut self, stream: &mut S) -> ParseResult<Self::Output> {
+                let ($(ref mut $var,)*) = self.0;
+                Ok(($($var.parse(stream)?,)*))
+            }
+        }
+    };
 }
 
-impl<I, P0, P1, S: Stream<Item = I> + ?Sized> LookaheadParser<S> for Concat<P0, P1>
-where
-    P0: LookaheadParser<S, Input = I>,
-    P1: Parser<S, Input = I>,
-{
-    fn parse_lookahead(&mut self, stream: &mut S) -> ParseResult<Option<Self::Output>> {
-        Ok(if let Some(x) = self.0.parse_lookahead(stream)? {
-            Some((x, self.1.parse(stream)?))
-        } else {
-            None
-        })
-    }
+macro_rules! define_concat_lookahead_parser {
+    () => {};
+    ($var0:ident : $ty0:ident, $($var:ident : $ty:ident,)*) => {
+        impl<I, $ty0, $($ty,)* S: Stream<Item = I> + ?Sized>
+            LookaheadParser<S> for Concat<($ty0, $($ty,)*)>
+        where
+            $ty0: LookaheadParser<S, Input = I>,
+            $($ty: Parser<S, Input = I>,)*
+        {
+            #[allow(unused_variables)]
+            fn parse_lookahead(&mut self, stream: &mut S) -> ParseResult<Option<Self::Output>> {
+                let (ref mut $var0, $(ref mut $var,)*) = self.0;
+                Ok(if let Some(x) = $var0.parse_lookahead(stream)? {
+                    Some((x, $($var.parse(stream)?,)*))
+                } else {
+                    None
+                })
+            }
+        }
+    };
 }
+
+macro_rules! define_concat_parsers {
+    (($($var:ident : $ty:ident,)*), ()) => {
+        define_concat_parser!($($var : $ty,)*);
+        define_concat_lookahead_parser!($($var : $ty,)*);
+    };
+    (($($var:ident : $ty:ident,)*), ($var2:ident : $ty2:ident, $($var3:ident : $ty3:ident,)*)) => {
+        define_concat_parser!($($var : $ty,)*);
+        define_concat_lookahead_parser!($($var : $ty,)*);
+        define_concat_parsers!(($($var : $ty,)* $var2 : $ty2,), ($($var3 : $ty3,)*));
+    };
+    ($($var:ident : $ty:ident,)*) => {
+        define_concat_parsers!((), ($($var : $ty,)*));
+    };
+}
+
+define_concat_parsers!(
+    p0: P0,
+    p1: P1,
+    p2: P2,
+    p3: P3,
+    p4: P4,
+    p5: P5,
+    p6: P6,
+    p7: P7,
+    p8: P8,
+    p9: P9,
+    p10: P10,
+    p11: P11,
+);
