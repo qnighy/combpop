@@ -64,3 +64,17 @@ where
         Ok((self.0.parse(stream)?, self.1.parse(stream)?))
     }
 }
+
+impl<I, P0, P1, S: Stream<Item = I> + ?Sized> LookaheadParser<S> for Concat<P0, P1>
+where
+    P0: LookaheadParser<S, Input = I>,
+    P1: Parser<S, Input = I>,
+{
+    fn parse_lookahead(&mut self, stream: &mut S) -> ParseResult<Option<Self::Output>> {
+        Ok(if let Some(x) = self.0.parse_lookahead(stream)? {
+            Some((x, self.1.parse(stream)?))
+        } else {
+            None
+        })
+    }
+}
