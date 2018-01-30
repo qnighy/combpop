@@ -1,30 +1,6 @@
 use std::marker::PhantomData;
 use {LookaheadParser, ParseError, ParseResult, Parser, Stream};
-
-fn parse_lookahead_all<I, O, S: Stream<Item = I> + ?Sized, P, Alt>(
-    parser: &mut P,
-    stream: &mut S,
-    alt: &mut Alt,
-) -> ParseResult<P::Output>
-where
-    P: Parser<S, Input = I, Output = O> + ?Sized,
-    Alt: Parser<S, Input = I, Output = O> + ?Sized,
-{
-    let pos = stream.mark();
-    match parser.parse(stream) {
-        Ok(x) => {
-            stream.commit();
-            Ok(x)
-        }
-        Err(e) => if e.is_recoverable() {
-            stream.rollback(pos);
-            alt.parse(stream)
-        } else {
-            stream.commit();
-            Err(e)
-        },
-    }
-}
+use stream::stream_transaction;
 
 pub fn any_token<I>() -> AnyToken<I> {
     AnyToken(PhantomData)
@@ -41,18 +17,8 @@ impl<I, S: Stream<Item = I> + ?Sized> Parser<S> for AnyToken<I> {
 }
 
 impl<I, S: Stream<Item = I> + ?Sized> LookaheadParser<S> for AnyToken<I> {
-    fn parse_lookahead<Alt>(&mut self, stream: &mut S, alt: &mut Alt) -> ParseResult<I>
-    where
-        Alt: Parser<S, Input = I, Output = I> + ?Sized,
-    {
-        parse_lookahead_all(self, stream, alt)
-    }
-    fn parse_lookahead_dyn(
-        &mut self,
-        stream: &mut S,
-        alt: &mut Parser<S, Input = I, Output = I>,
-    ) -> ParseResult<I> {
-        self.parse_lookahead(stream, alt)
+    fn parse_lookahead(&mut self, stream: &mut S) -> ParseResult<Option<I>> {
+        stream_transaction(stream, |stream| self.parse(stream))
     }
 }
 
@@ -76,18 +42,8 @@ impl<I, S: Stream<Item = I> + ?Sized, F: FnMut(&I) -> bool> Parser<S> for Token<
 }
 
 impl<I, S: Stream<Item = I> + ?Sized, F: FnMut(&I) -> bool> LookaheadParser<S> for Token<I, F> {
-    fn parse_lookahead<Alt>(&mut self, stream: &mut S, alt: &mut Alt) -> ParseResult<I>
-    where
-        Alt: Parser<S, Input = I, Output = I> + ?Sized,
-    {
-        parse_lookahead_all(self, stream, alt)
-    }
-    fn parse_lookahead_dyn(
-        &mut self,
-        stream: &mut S,
-        alt: &mut Parser<S, Input = I, Output = I>,
-    ) -> ParseResult<I> {
-        self.parse_lookahead(stream, alt)
+    fn parse_lookahead(&mut self, stream: &mut S) -> ParseResult<Option<I>> {
+        stream_transaction(stream, |stream| self.parse(stream))
     }
 }
 

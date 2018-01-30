@@ -26,15 +26,7 @@ pub trait Parser<S: Stream<Item = Self::Input> + ?Sized> {
     fn parse(&mut self, stream: &mut S) -> ParseResult<Self::Output>;
 }
 pub trait LookaheadParser<S: Stream<Item = Self::Input> + ?Sized>: Parser<S> {
-    fn parse_lookahead<Alt>(&mut self, stream: &mut S, alt: &mut Alt) -> ParseResult<Self::Output>
-    where
-        Alt: Parser<S, Input = Self::Input, Output = Self::Output> + ?Sized,
-        Self: Sized;
-    fn parse_lookahead_dyn(
-        &mut self,
-        stream: &mut S,
-        alt: &mut Parser<S, Input = Self::Input, Output = Self::Output>,
-    ) -> ParseResult<Self::Output>;
+    fn parse_lookahead(&mut self, stream: &mut S) -> ParseResult<Option<Self::Output>>;
 }
 
 #[cfg(test)]

@@ -8,6 +8,26 @@ pub trait Stream {
     fn commit(&mut self);
 }
 
+pub fn stream_transaction<R, S: Stream + ?Sized, F: FnOnce(&mut S) -> ParseResult<R>>(
+    stream: &mut S,
+    f: F,
+) -> ParseResult<Option<R>> {
+    let pos = stream.mark();
+    match f(stream) {
+        Ok(x) => {
+            stream.commit();
+            Ok(Some(x))
+        }
+        Err(e) => if e.is_recoverable() {
+            stream.rollback(pos);
+            Ok(None)
+        } else {
+            stream.commit();
+            Err(e)
+        },
+    }
+}
+
 pub struct SliceStream<'a, T: 'a> {
     slice: &'a [T],
     position: usize,
