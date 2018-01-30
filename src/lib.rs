@@ -20,15 +20,21 @@ impl ParseError {
 
 pub type ParseResult<T> = Result<T, ParseError>;
 
-pub trait Parser<O, S: Stream + ?Sized> {
-    fn parse(&mut self, stream: &mut S) -> ParseResult<O>;
+pub trait Parser<S: Stream<Item = Self::Input> + ?Sized> {
+    type Input;
+    type Output;
+    fn parse(&mut self, stream: &mut S) -> ParseResult<Self::Output>;
 }
-pub trait LookaheadParser<O, S: Stream + ?Sized>: Parser<O, S> {
-    fn parse_lookahead<Alt>(&mut self, stream: &mut S, alt: &mut Alt) -> ParseResult<O>
+pub trait LookaheadParser<S: Stream<Item = Self::Input> + ?Sized>: Parser<S> {
+    fn parse_lookahead<Alt>(&mut self, stream: &mut S, alt: &mut Alt) -> ParseResult<Self::Output>
     where
-        Alt: Parser<O, S> + ?Sized,
+        Alt: Parser<S, Input = Self::Input, Output = Self::Output> + ?Sized,
         Self: Sized;
-    fn parse_lookahead_dyn(&mut self, stream: &mut S, alt: &mut Parser<O, S>) -> ParseResult<O>;
+    fn parse_lookahead_dyn(
+        &mut self,
+        stream: &mut S,
+        alt: &mut Parser<S, Input = Self::Input, Output = Self::Output>,
+    ) -> ParseResult<Self::Output>;
 }
 
 #[cfg(test)]
