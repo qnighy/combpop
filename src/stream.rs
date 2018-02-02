@@ -2,7 +2,9 @@ use {ParseError, ParseResult};
 
 pub trait Stream {
     type Item;
-    fn next(&mut self) -> ParseResult<&Self::Item>;
+    fn lookahead(&mut self, len: usize) -> ParseResult<()>;
+    fn get(&self, idx: usize) -> &Self::Item;
+    fn advance(&mut self, len: usize);
     fn mark(&mut self) -> u64;
     fn rollback(&mut self, pos: u64);
     fn commit(&mut self);
@@ -46,16 +48,21 @@ impl<'a, T: 'a> SliceStream<'a, T> {
 
 impl<'a, T: Copy + 'a> Stream for SliceStream<'a, T> {
     type Item = T;
-    fn next(&mut self) -> ParseResult<&Self::Item> {
-        let pos = self.position;
-        if pos < self.slice.len() {
-            self.position += 1;
-            Ok(&self.slice[pos])
+    fn lookahead(&mut self, len: usize) -> ParseResult<()> {
+        if self.position + len <= self.slice.len() {
+            Ok(())
         } else if self.ready {
             Err(ParseError::EOF)
         } else {
             Err(ParseError::NotReady)
         }
+    }
+    fn get(&self, idx: usize) -> &Self::Item {
+        &self.slice[self.position + idx]
+    }
+    fn advance(&mut self, len: usize) {
+        assert!(self.position + len <= self.slice.len());
+        self.position += len;
     }
     fn mark(&mut self) -> u64 {
         self.position as u64
@@ -72,19 +79,31 @@ mod tests {
 
     #[test]
     fn test_slice_stream() {
-        let mut s = SliceStream::new(b"Hello");
-        assert_eq!(s.next().unwrap(), &b'H');
-        assert_eq!(s.mark(), 1);
-        assert_eq!(s.next().unwrap(), &b'e');
-        assert_eq!(s.next().unwrap(), &b'l');
-        assert_eq!(s.mark(), 3);
-        assert_eq!(s.next().unwrap(), &b'l');
-        s.commit();
-        s.rollback(1);
-        assert_eq!(s.next().unwrap(), &b'e');
-        assert_eq!(s.next().unwrap(), &b'l');
-        assert_eq!(s.next().unwrap(), &b'l');
-        assert_eq!(s.next().unwrap(), &b'o');
-        assert!(s.next().is_err());
+        let mut s = SliceStream::new(b"Hello"); // [0] -- 0
+        s.lookahead(2).unwrap(); // [0] -- 2
+        assert_eq!(s.get(1), &b'e');
+        assert_eq!(s.get(0), &b'H');
+        s.advance(1); // [1] -- 2
+        assert_eq!(s.mark(), 1); // [1, 1] -- 2
+        s.lookahead(1).unwrap(); // [1, 1] -- 2
+        assert_eq!(s.get(0), &b'e');
+        s.lookahead(2).unwrap(); // [1, 1] -- 3
+        assert_eq!(s.get(1), &b'l');
+        s.advance(2); // [1, 3] -- 3
+        assert_eq!(s.mark(), 3); // [1, 3, 3] -- 3
+        s.lookahead(1).unwrap(); // [1, 3, 3] -- 4
+        assert_eq!(s.get(0), &b'l');
+        s.commit(); // [1, 3] -- 4
+        s.rollback(1); // [1] -- 4
+        s.lookahead(4).unwrap(); // [1] -- 5
+        assert_eq!(s.get(0), &b'e');
+        assert_eq!(s.get(1), &b'l');
+        assert_eq!(s.get(2), &b'l');
+        s.advance(3); // [4] -- 5
+        assert_eq!(s.get(0), &b'o');
+        assert!(s.lookahead(2).is_err());
+        s.lookahead(1).unwrap(); // [4] -- 5
+        s.advance(1); // [5] -- 5
+        assert!(s.lookahead(1).is_err());
     }
 }

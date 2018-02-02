@@ -14,8 +14,8 @@ impl<I: Clone> ParserBase for AnyToken<I> {
 }
 impl<I: Clone, S: Stream<Item = I> + ?Sized> Parser<S> for AnyToken<I> {
     fn parse(&mut self, stream: &mut S) -> ParseResult<I> {
-        match stream.next() {
-            Ok(x) => Ok(x.clone()),
+        match stream.lookahead(1) {
+            Ok(()) => Ok(stream.get(0).clone()),
             Err(ParseError::EOF) => Err(ParseError::SyntaxError),
             Err(e) => Err(e),
         }
@@ -40,12 +40,15 @@ impl<I: Clone, F: FnMut(&I) -> bool> ParserBase for Token<I, F> {
 }
 impl<I: Clone, S: Stream<Item = I> + ?Sized, F: FnMut(&I) -> bool> Parser<S> for Token<I, F> {
     fn parse(&mut self, stream: &mut S) -> ParseResult<I> {
-        match stream.next() {
-            Ok(x) => if (self.0)(x) {
-                Ok(x.clone())
-            } else {
-                Err(ParseError::SyntaxError)
-            },
+        match stream.lookahead(1) {
+            Ok(()) => {
+                let x = stream.get(0);
+                if (self.0)(x) {
+                    Ok(x.clone())
+                } else {
+                    Err(ParseError::SyntaxError)
+                }
+            }
             Err(ParseError::EOF) => Err(ParseError::SyntaxError),
             Err(e) => Err(e),
         }
