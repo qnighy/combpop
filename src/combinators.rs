@@ -1,5 +1,5 @@
 use std::marker::PhantomData;
-use {LookaheadParser, ParseError, ParseResult, Parser, Stream};
+use {LookaheadParser, ParseError, ParseResult, Parser, ParserBase, Stream};
 use stream::stream_transaction;
 
 pub fn any_token<I: Clone>() -> AnyToken<I> {
@@ -8,9 +8,11 @@ pub fn any_token<I: Clone>() -> AnyToken<I> {
 
 pub struct AnyToken<I: Clone>(PhantomData<fn(I)>);
 
-impl<I: Clone, S: Stream<Item = I> + ?Sized> Parser<S> for AnyToken<I> {
+impl<I: Clone> ParserBase for AnyToken<I> {
     type Input = I;
     type Output = I;
+}
+impl<I: Clone, S: Stream<Item = I> + ?Sized> Parser<S> for AnyToken<I> {
     fn parse(&mut self, stream: &mut S) -> ParseResult<I> {
         match stream.next() {
             Ok(x) => Ok(x.clone()),
@@ -32,9 +34,11 @@ pub fn token<I: Clone, F: FnMut(&I) -> bool>(f: F) -> Token<I, F> {
 
 pub struct Token<I: Clone, F: FnMut(&I) -> bool>(F, PhantomData<fn(I)>);
 
-impl<I: Clone, S: Stream<Item = I> + ?Sized, F: FnMut(&I) -> bool> Parser<S> for Token<I, F> {
+impl<I: Clone, F: FnMut(&I) -> bool> ParserBase for Token<I, F> {
     type Input = I;
     type Output = I;
+}
+impl<I: Clone, S: Stream<Item = I> + ?Sized, F: FnMut(&I) -> bool> Parser<S> for Token<I, F> {
     fn parse(&mut self, stream: &mut S) -> ParseResult<I> {
         match stream.next() {
             Ok(x) => if (self.0)(x) {
@@ -55,20 +59,28 @@ impl<I: Clone, S: Stream<Item = I> + ?Sized, F: FnMut(&I) -> bool> LookaheadPars
     }
 }
 
-pub fn concat<P>(p: P) -> Concat<P> {
-    Concat(p)
+pub fn concat<I, P>(p: P) -> Concat<I, P>
+where
+    Concat<I, P>: ParserBase,
+{
+    Concat(p, PhantomData)
 }
 
-pub struct Concat<P>(P);
+pub struct Concat<I, P>(P, PhantomData<fn(I)>);
 
 macro_rules! define_concat_parser {
     ($($var:ident : $ty:ident,)*) => {
-        impl<I, $($ty,)* S: Stream<Item = I> + ?Sized> Parser<S> for Concat<($($ty,)*)>
+        impl<I, $($ty,)*> ParserBase for Concat<I, ($($ty,)*)>
         where
-            $($ty: Parser<S, Input = I>,)*
+            $($ty: ParserBase<Input = I>,)*
         {
             type Input = I;
             type Output = ($($ty::Output,)*);
+        }
+        impl<I, $($ty,)* S: Stream<Item = I> + ?Sized> Parser<S> for Concat<I, ($($ty,)*)>
+        where
+            $($ty: Parser<S, Input = I>,)*
+        {
             #[allow(unused_variables)]
             fn parse(&mut self, stream: &mut S) -> ParseResult<Self::Output> {
                 let ($(ref mut $var,)*) = self.0;
@@ -82,7 +94,7 @@ macro_rules! define_concat_lookahead_parser {
     () => {};
     ($var0:ident : $ty0:ident, $($var:ident : $ty:ident,)*) => {
         impl<I, $ty0, $($ty,)* S: Stream<Item = I> + ?Sized>
-            LookaheadParser<S> for Concat<($ty0, $($ty,)*)>
+            LookaheadParser<S> for Concat<I, ($ty0, $($ty,)*)>
         where
             $ty0: LookaheadParser<S, Input = I>,
             $($ty: Parser<S, Input = I>,)*

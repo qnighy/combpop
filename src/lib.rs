@@ -20,9 +20,11 @@ impl ParseError {
 
 pub type ParseResult<T> = Result<T, ParseError>;
 
-pub trait Parser<S: Stream<Item = Self::Input> + ?Sized> {
+pub trait ParserBase {
     type Input;
     type Output;
+}
+pub trait Parser<S: Stream<Item = Self::Input> + ?Sized>: ParserBase {
     fn parse(&mut self, stream: &mut S) -> ParseResult<Self::Output>;
 }
 pub trait LookaheadParser<S: Stream<Item = Self::Input> + ?Sized>: Parser<S> {
