@@ -1,5 +1,5 @@
 use std::marker::PhantomData;
-use {LookaheadParser, ParseError, ParseResult, Parser, ParserBase, Stream};
+use {Consume, LookaheadParser, ParseError, ParseResult, Parser, ParserBase, Stream};
 use stream::stream_transaction;
 
 pub fn any_token<I: Clone>() -> AnyToken<I> {
@@ -13,9 +13,9 @@ impl<I: Clone> ParserBase for AnyToken<I> {
     type Output = I;
 }
 impl<I: Clone, S: Stream<Item = I> + ?Sized> Parser<S> for AnyToken<I> {
-    fn parse(&mut self, stream: &mut S) -> ParseResult<I> {
+    fn parse(&mut self, stream: &mut S) -> ParseResult<(I, Consume)> {
         match stream.lookahead(1) {
-            Ok(()) => Ok(stream.get(0).clone()),
+            Ok(()) => Ok((stream.get(0).clone(), Consume::Consumed)),
             Err(ParseError::EOF) => Err(ParseError::SyntaxError),
             Err(e) => Err(e),
         }
@@ -24,7 +24,7 @@ impl<I: Clone, S: Stream<Item = I> + ?Sized> Parser<S> for AnyToken<I> {
 
 impl<I: Clone, S: Stream<Item = I> + ?Sized> LookaheadParser<S> for AnyToken<I> {
     fn parse_lookahead(&mut self, stream: &mut S) -> ParseResult<Option<I>> {
-        stream_transaction(stream, |stream| self.parse(stream))
+        stream_transaction(stream, |stream| self.parse(stream).map(|(x, _)| x))
     }
 }
 
@@ -39,12 +39,12 @@ impl<I: Clone, F: FnMut(&I) -> bool> ParserBase for Token<I, F> {
     type Output = I;
 }
 impl<I: Clone, S: Stream<Item = I> + ?Sized, F: FnMut(&I) -> bool> Parser<S> for Token<I, F> {
-    fn parse(&mut self, stream: &mut S) -> ParseResult<I> {
+    fn parse(&mut self, stream: &mut S) -> ParseResult<(I, Consume)> {
         match stream.lookahead(1) {
             Ok(()) => {
                 let x = stream.get(0);
                 if (self.0)(x) {
-                    Ok(x.clone())
+                    Ok((x.clone(), Consume::Consumed))
                 } else {
                     Err(ParseError::SyntaxError)
                 }
@@ -58,7 +58,7 @@ impl<I: Clone, S: Stream<Item = I> + ?Sized, F: FnMut(&I) -> bool> Parser<S> for
 impl<I: Clone, S: Stream<Item = I> + ?Sized, F: FnMut(&I) -> bool> LookaheadParser<S>
     for Token<I, F> {
     fn parse_lookahead(&mut self, stream: &mut S) -> ParseResult<Option<I>> {
-        stream_transaction(stream, |stream| self.parse(stream))
+        stream_transaction(stream, |stream| self.parse(stream).map(|(x, _)| x))
     }
 }
 
@@ -85,9 +85,10 @@ macro_rules! define_concat_parser {
             $($ty: Parser<S, Input = I>,)*
         {
             #[allow(unused_variables)]
-            fn parse(&mut self, stream: &mut S) -> ParseResult<Self::Output> {
+            fn parse(&mut self, stream: &mut S) -> ParseResult<(Self::Output, Consume)> {
                 let ($(ref mut $var,)*) = self.0;
-                Ok(($($var.parse(stream)?,)*))
+                $(let $var = $var.parse(stream)?;)*
+                Ok((($($var.0,)*), Consume::Empty $(| $var.1)*))
             }
         }
     };
@@ -106,7 +107,7 @@ macro_rules! define_concat_lookahead_parser {
             fn parse_lookahead(&mut self, stream: &mut S) -> ParseResult<Option<Self::Output>> {
                 let (ref mut $var0, $(ref mut $var,)*) = self.0;
                 Ok(if let Some(x) = $var0.parse_lookahead(stream)? {
-                    Some((x, $($var.parse(stream)?,)*))
+                    Some((x, $($var.parse(stream)?.0,)*))
                 } else {
                     None
                 })
