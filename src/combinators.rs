@@ -2,46 +2,54 @@ use std::marker::PhantomData;
 use {LookaheadParser, ParseError, ParseResult, Parser, Stream};
 use stream::stream_transaction;
 
-pub fn any_token<I>() -> AnyToken<I> {
+pub fn any_token<I: Clone>() -> AnyToken<I> {
     AnyToken(PhantomData)
 }
 
-pub struct AnyToken<I>(PhantomData<fn(I)>);
+pub struct AnyToken<I: Clone>(PhantomData<fn(I)>);
 
-impl<I, S: Stream<Item = I> + ?Sized> Parser<S> for AnyToken<I> {
+impl<I: Clone, S: Stream<Item = I> + ?Sized> Parser<S> for AnyToken<I> {
     type Input = I;
     type Output = I;
     fn parse(&mut self, stream: &mut S) -> ParseResult<I> {
-        stream.next()
+        match stream.next() {
+            Ok(x) => Ok(x.clone()),
+            Err(ParseError::EOF) => Err(ParseError::SyntaxError),
+            Err(e) => Err(e),
+        }
     }
 }
 
-impl<I, S: Stream<Item = I> + ?Sized> LookaheadParser<S> for AnyToken<I> {
+impl<I: Clone, S: Stream<Item = I> + ?Sized> LookaheadParser<S> for AnyToken<I> {
     fn parse_lookahead(&mut self, stream: &mut S) -> ParseResult<Option<I>> {
         stream_transaction(stream, |stream| self.parse(stream))
     }
 }
 
-pub fn token<I, F: FnMut(&I) -> bool>(f: F) -> Token<I, F> {
+pub fn token<I: Clone, F: FnMut(&I) -> bool>(f: F) -> Token<I, F> {
     Token(f, PhantomData)
 }
 
-pub struct Token<I, F: FnMut(&I) -> bool>(F, PhantomData<fn(I)>);
+pub struct Token<I: Clone, F: FnMut(&I) -> bool>(F, PhantomData<fn(I)>);
 
-impl<I, S: Stream<Item = I> + ?Sized, F: FnMut(&I) -> bool> Parser<S> for Token<I, F> {
+impl<I: Clone, S: Stream<Item = I> + ?Sized, F: FnMut(&I) -> bool> Parser<S> for Token<I, F> {
     type Input = I;
     type Output = I;
     fn parse(&mut self, stream: &mut S) -> ParseResult<I> {
-        let x = stream.next()?;
-        if (self.0)(&x) {
-            Ok(x)
-        } else {
-            Err(ParseError::SyntaxError)
+        match stream.next() {
+            Ok(x) => if (self.0)(x) {
+                Ok(x.clone())
+            } else {
+                Err(ParseError::SyntaxError)
+            },
+            Err(ParseError::EOF) => Err(ParseError::SyntaxError),
+            Err(e) => Err(e),
         }
     }
 }
 
-impl<I, S: Stream<Item = I> + ?Sized, F: FnMut(&I) -> bool> LookaheadParser<S> for Token<I, F> {
+impl<I: Clone, S: Stream<Item = I> + ?Sized, F: FnMut(&I) -> bool> LookaheadParser<S>
+    for Token<I, F> {
     fn parse_lookahead(&mut self, stream: &mut S) -> ParseResult<Option<I>> {
         stream_transaction(stream, |stream| self.parse(stream))
     }

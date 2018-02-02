@@ -2,7 +2,7 @@ use {ParseError, ParseResult};
 
 pub trait Stream {
     type Item;
-    fn next(&mut self) -> ParseResult<Self::Item>;
+    fn next(&mut self) -> ParseResult<&Self::Item>;
     fn mark(&mut self) -> u64;
     fn rollback(&mut self, pos: u64);
     fn commit(&mut self);
@@ -46,11 +46,11 @@ impl<'a, T: 'a> SliceStream<'a, T> {
 
 impl<'a, T: Copy + 'a> Stream for SliceStream<'a, T> {
     type Item = T;
-    fn next(&mut self) -> ParseResult<Self::Item> {
-        if self.position < self.slice.len() {
-            let val = self.slice[self.position];
+    fn next(&mut self) -> ParseResult<&Self::Item> {
+        let pos = self.position;
+        if pos < self.slice.len() {
             self.position += 1;
-            Ok(val)
+            Ok(&self.slice[pos])
         } else if self.ready {
             Err(ParseError::EOF)
         } else {
@@ -73,18 +73,18 @@ mod tests {
     #[test]
     fn test_slice_stream() {
         let mut s = SliceStream::new(b"Hello");
-        assert_eq!(s.next().unwrap(), b'H');
+        assert_eq!(s.next().unwrap(), &b'H');
         assert_eq!(s.mark(), 1);
-        assert_eq!(s.next().unwrap(), b'e');
-        assert_eq!(s.next().unwrap(), b'l');
+        assert_eq!(s.next().unwrap(), &b'e');
+        assert_eq!(s.next().unwrap(), &b'l');
         assert_eq!(s.mark(), 3);
-        assert_eq!(s.next().unwrap(), b'l');
+        assert_eq!(s.next().unwrap(), &b'l');
         s.commit();
         s.rollback(1);
-        assert_eq!(s.next().unwrap(), b'e');
-        assert_eq!(s.next().unwrap(), b'l');
-        assert_eq!(s.next().unwrap(), b'l');
-        assert_eq!(s.next().unwrap(), b'o');
+        assert_eq!(s.next().unwrap(), &b'e');
+        assert_eq!(s.next().unwrap(), &b'l');
+        assert_eq!(s.next().unwrap(), &b'l');
+        assert_eq!(s.next().unwrap(), &b'o');
         assert!(s.next().is_err());
     }
 }
