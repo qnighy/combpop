@@ -18,19 +18,16 @@ impl<I: Clone> ParserBase for AnyToken<I> {
     }
 }
 impl<I: Clone, S: Stream<Item = I> + ?Sized> Parser<S> for AnyToken<I> {
-    fn parse(&mut self, stream: &mut S) -> ParseResult<(I, Consume)> {
+    fn parse_lookahead(&mut self, stream: &mut S) -> ParseResult<Option<(I, Consume)>> {
         match stream.lookahead(1) {
             Ok(()) => {
                 let x = stream.get(0).clone();
                 stream.advance(1);
-                Ok((x, Consume::Consumed))
+                Ok(Some((x, Consume::Consumed)))
             }
-            Err(ParseError::EOF) => Err(ParseError::SyntaxError),
+            Err(ParseError::EOF) => Ok(None),
             Err(e) => Err(e),
         }
-    }
-    fn parse_lookahead(&mut self, stream: &mut S) -> ParseResult<Option<(I, Consume)>> {
-        self.parse(stream).map(Some)
     }
 }
 
@@ -51,23 +48,20 @@ impl<I: Clone, F: FnMut(&I) -> bool> ParserBase for Token<I, F> {
     }
 }
 impl<I: Clone, S: Stream<Item = I> + ?Sized, F: FnMut(&I) -> bool> Parser<S> for Token<I, F> {
-    fn parse(&mut self, stream: &mut S) -> ParseResult<(I, Consume)> {
+    fn parse_lookahead(&mut self, stream: &mut S) -> ParseResult<Option<(I, Consume)>> {
         match stream.lookahead(1) {
             Ok(()) => {
                 if (self.0)(stream.get(0)) {
                     let x = stream.get(0).clone();
                     stream.advance(1);
-                    Ok((x, Consume::Consumed))
+                    Ok(Some((x, Consume::Consumed)))
                 } else {
-                    Err(ParseError::SyntaxError)
+                    Ok(None)
                 }
             }
-            Err(ParseError::EOF) => Err(ParseError::SyntaxError),
+            Err(ParseError::EOF) => Ok(None),
             Err(e) => Err(e),
         }
-    }
-    fn parse_lookahead(&mut self, stream: &mut S) -> ParseResult<Option<(I, Consume)>> {
-        self.parse(stream).map(Some)
     }
 }
 

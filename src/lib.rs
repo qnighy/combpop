@@ -76,7 +76,13 @@ pub trait ParserBase {
     }
 }
 pub trait Parser<S: Stream<Item = Self::Input> + ?Sized>: ParserBase {
-    fn parse(&mut self, stream: &mut S) -> ParseResult<(Self::Output, Consume)>;
+    fn parse(&mut self, stream: &mut S) -> ParseResult<(Self::Output, Consume)> {
+        if let Some(x) = self.parse_lookahead(stream)? {
+            Ok(x)
+        } else {
+            Err(ParseError::SyntaxError)
+        }
+    }
     fn parse_lookahead(&mut self, stream: &mut S) -> ParseResult<Option<(Self::Output, Consume)>>;
 }
 
