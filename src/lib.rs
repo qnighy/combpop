@@ -62,6 +62,12 @@ impl ::std::ops::BitOrAssign for Consume {
 pub trait ParserBase {
     type Input;
     type Output;
+    fn nonempty() -> bool
+    where
+        Self: Sized,
+    {
+        false
+    }
 }
 pub trait Parser<S: Stream<Item = Self::Input> + ?Sized>: ParserBase {
     fn parse(&mut self, stream: &mut S) -> ParseResult<(Self::Output, Consume)>;
