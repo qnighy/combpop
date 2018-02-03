@@ -100,38 +100,59 @@ macro_rules! define_concat_parser {
             $($ty: Parser<S, Input = I>,)*
         {
             #[allow(unused_variables)]
-            fn parse(&mut self, stream: &mut S) -> ParseResult<(Self::Output, Consume)> {
+            fn parse_consume(&mut self, stream: &mut S) -> ParseResult<(Self::Output, Consume)> {
                 let ($(ref mut $var,)*) = self.0;
                 let consumed = Consume::Empty;
-                $(
-                    let ($var, consumed) = {
-                        let (x, c) = $var.parse(stream)?;
-                        (x, consumed | c)
-                    };
-                )*
-                Ok((($($var,)*), consumed))
+                concat_parse_consume!{(), ($($var : $ty,)*), stream, consumed}
             }
             #[allow(unused_variables)]
             fn parse_lookahead(&mut self, stream: &mut S)
                     -> ParseResult<Option<(Self::Output, Consume)>> {
                 let ($(ref mut $var,)*) = self.0;
                 let consumed = Consume::Empty;
-                concat_lookahead!{(), ($($var : $ty,)*), stream, consumed}
+                concat_parse_lookahead!{(), ($($var : $ty,)*), stream, consumed}
             }
         }
     };
 }
 
-macro_rules! concat_lookahead {
+macro_rules! concat_parse_consume {
+    (($($var:ident : $ty:ident,)*), (), $stream:ident, $consumed:ident) => {
+        Ok((($($var,)*), $consumed))
+    };
+    (($($var:ident : $ty:ident,)*), ($var2:ident : $ty2:ident, $($var3:ident : $ty3:ident,)*),
+    $stream:ident, $consumed:ident) => {
+        if $ty2::nonempty() {
+            let $var2 = $var2.parse($stream)?;
+            $(
+                let $var3 = $var3.parse($stream)?;
+            )*
+            return Ok((($($var,)* $var2, $($var3,)*), Consume::Consumed));
+        }
+        let ($var2, $consumed) = {
+            let (x, c) = $var2.parse_consume($stream)?;
+            (x, $consumed | c)
+        };
+        concat_parse_consume!{
+            ($($var : $ty,)* $var2 : $ty2,), ($($var3 : $ty3,)*), $stream, $consumed
+        }
+    };
+}
+
+macro_rules! concat_parse_lookahead {
     (($($var:ident : $ty:ident,)*), (), $stream:ident, $consumed:ident) => {
         Ok(Some((($($var,)*), $consumed)))
     };
     (($($var:ident : $ty:ident,)*), ($var2:ident : $ty2:ident, $($var3:ident : $ty3:ident,)*),
     $stream:ident, $consumed:ident) => {
         if $ty2::nonempty() {
-            let ($var2, _) = $var2.parse($stream)?;
+            let $var2 = if let Some((x, _)) = $var2.parse_lookahead($stream)? {
+                x
+            } else {
+                return Err(ParseError::SyntaxError)
+            };
             $(
-                let ($var3, _) = $var3.parse($stream)?;
+                let $var3 = $var3.parse($stream)?;
             )*
             return Ok(Some((($($var,)* $var2, $($var3,)*), Consume::Consumed)));
         }
@@ -142,7 +163,9 @@ macro_rules! concat_lookahead {
         } else {
             return Ok(None)
         };
-        concat_lookahead!{($($var : $ty,)* $var2 : $ty2,), ($($var3 : $ty3,)*), $stream, $consumed}
+        concat_parse_lookahead!{
+            ($($var : $ty,)* $var2 : $ty2,), ($($var3 : $ty3,)*), $stream, $consumed
+        }
     };
 }
 
