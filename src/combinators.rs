@@ -1,6 +1,5 @@
 use std::marker::PhantomData;
 use {Consume, ParseError, ParseResult, Parser, ParserBase, Stream};
-use stream::stream_transaction;
 
 pub fn any_token<I: Clone>() -> AnyToken<I> {
     AnyToken(PhantomData)
@@ -21,13 +20,17 @@ impl<I: Clone> ParserBase for AnyToken<I> {
 impl<I: Clone, S: Stream<Item = I> + ?Sized> Parser<S> for AnyToken<I> {
     fn parse(&mut self, stream: &mut S) -> ParseResult<(I, Consume)> {
         match stream.lookahead(1) {
-            Ok(()) => Ok((stream.get(0).clone(), Consume::Consumed)),
+            Ok(()) => {
+                let x = stream.get(0).clone();
+                stream.advance(1);
+                Ok((x, Consume::Consumed))
+            }
             Err(ParseError::EOF) => Err(ParseError::SyntaxError),
             Err(e) => Err(e),
         }
     }
     fn parse_lookahead(&mut self, stream: &mut S) -> ParseResult<Option<(I, Consume)>> {
-        stream_transaction(stream, |stream| self.parse(stream))
+        self.parse(stream).map(Some)
     }
 }
 
@@ -51,9 +54,10 @@ impl<I: Clone, S: Stream<Item = I> + ?Sized, F: FnMut(&I) -> bool> Parser<S> for
     fn parse(&mut self, stream: &mut S) -> ParseResult<(I, Consume)> {
         match stream.lookahead(1) {
             Ok(()) => {
-                let x = stream.get(0);
-                if (self.0)(x) {
-                    Ok((x.clone(), Consume::Consumed))
+                if (self.0)(stream.get(0)) {
+                    let x = stream.get(0).clone();
+                    stream.advance(1);
+                    Ok((x, Consume::Consumed))
                 } else {
                     Err(ParseError::SyntaxError)
                 }
@@ -63,7 +67,7 @@ impl<I: Clone, S: Stream<Item = I> + ?Sized, F: FnMut(&I) -> bool> Parser<S> for
         }
     }
     fn parse_lookahead(&mut self, stream: &mut S) -> ParseResult<Option<(I, Consume)>> {
-        stream_transaction(stream, |stream| self.parse(stream))
+        self.parse(stream).map(Some)
     }
 }
 
