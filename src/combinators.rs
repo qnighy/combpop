@@ -29,6 +29,9 @@ impl<I: Clone, S: Stream<Item = I> + ?Sized> Parser<S> for AnyToken<I> {
             Err(e) => Err(e),
         }
     }
+    fn emit_expectations(&mut self, _stream: &mut S) {
+        // TODO
+    }
 }
 
 pub fn token<I: Clone, F: FnMut(&I) -> bool>(f: F) -> Token<I, F> {
@@ -62,6 +65,9 @@ impl<I: Clone, S: Stream<Item = I> + ?Sized, F: FnMut(&I) -> bool> Parser<S> for
             Err(ParseError::EOF) => Ok(None),
             Err(e) => Err(e),
         }
+    }
+    fn emit_expectations(&mut self, _stream: &mut S) {
+        // TODO
     }
 }
 
@@ -110,7 +116,23 @@ macro_rules! define_concat_parser {
                     -> ParseResult<Option<(Self::Output, Consume)>> {
                 let ($(ref mut $var,)*) = self.0;
                 let consumed = Consume::Empty;
-                concat_parse_lookahead!{(), ($($var : $ty,)*), stream, consumed}
+                let lazy_emit = true;
+                concat_parse_lookahead!{(), ($($var : $ty,)*), stream, consumed, lazy_emit}
+            }
+            #[allow(unused_variables)]
+            fn emit_expectations(&mut self, stream: &mut S) {
+                let ($(ref mut $var,)*) = self.0;
+                $(
+                    if $ty::nonempty() {
+                        $var.emit_expectations(stream);
+                        return;
+                    }
+                    if !$ty::no_backtrack() {
+                        // Eager emit; exit.
+                        return;
+                    }
+                    $var.emit_expectations(stream);
+                )*
             }
         }
     };
@@ -140,31 +162,41 @@ macro_rules! concat_parse_consume {
 }
 
 macro_rules! concat_parse_lookahead {
-    (($($var:ident : $ty:ident,)*), (), $stream:ident, $consumed:ident) => {
+    (($($var:ident : $ty:ident,)*), (), $stream:ident, $consumed:ident, $lazy_emit:ident) => {
         Ok(Some((($($var,)*), $consumed)))
     };
     (($($var:ident : $ty:ident,)*), ($var2:ident : $ty2:ident, $($var3:ident : $ty3:ident,)*),
-    $stream:ident, $consumed:ident) => {
+    $stream:ident, $consumed:ident, $lazy_emit:ident) => {
         if $ty2::nonempty() {
             let $var2 = if let Some((x, _)) = $var2.parse_lookahead($stream)? {
                 x
             } else {
-                return Err(ParseError::SyntaxError)
+                if !$lazy_emit {
+                    $var2.emit_expectations($stream);
+                }
+                return Ok(None)
             };
             $(
                 let $var3 = $var3.parse($stream)?;
             )*
             return Ok(Some((($($var,)* $var2, $($var3,)*), Consume::Consumed)));
         }
+        let $lazy_emit = $lazy_emit && $ty2::no_backtrack();
         let ($var2, $consumed) = if let Some((x, c)) = $var2.parse_lookahead($stream)? {
+            if ($consumed | c) == Consume::Empty && !$lazy_emit {
+                $var2.emit_expectations($stream);
+            }
             (x, $consumed | c)
         } else if $consumed == Consume::Consumed {
             return Err(ParseError::SyntaxError)
         } else {
+            if !$lazy_emit {
+                $var2.emit_expectations($stream);
+            }
             return Ok(None)
         };
         concat_parse_lookahead!{
-            ($($var : $ty,)* $var2 : $ty2,), ($($var3 : $ty3,)*), $stream, $consumed
+            ($($var : $ty,)* $var2 : $ty2,), ($($var3 : $ty3,)*), $stream, $consumed, $lazy_emit
         }
     };
 }

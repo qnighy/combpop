@@ -83,10 +83,12 @@ pub trait Parser<S: Stream<Item = Self::Input> + ?Sized>: ParserBase {
         if let Some(x) = self.parse_lookahead(stream)? {
             Ok(x)
         } else {
+            self.emit_expectations(stream);
             Err(ParseError::SyntaxError)
         }
     }
     fn parse_lookahead(&mut self, stream: &mut S) -> ParseResult<Option<(Self::Output, Consume)>>;
+    fn emit_expectations(&mut self, stream: &mut S);
 }
 
 #[cfg(test)]
