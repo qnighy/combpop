@@ -68,6 +68,12 @@ pub trait ParserBase {
     {
         false
     }
+    fn no_backtrack() -> bool
+    where
+        Self: Sized,
+    {
+        false
+    }
 }
 pub trait Parser<S: Stream<Item = Self::Input> + ?Sized>: ParserBase {
     fn parse(&mut self, stream: &mut S) -> ParseResult<(Self::Output, Consume)>;

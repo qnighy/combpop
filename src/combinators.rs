@@ -94,6 +94,12 @@ macro_rules! define_concat_parser {
             {
                 false $(|| $ty::nonempty())*
             }
+            fn no_backtrack() -> bool
+            where
+                Self: Sized,
+            {
+                true $(&& $ty::no_backtrack())*
+            }
         }
         impl<I, $($ty,)* S: Stream<Item = I> + ?Sized> Parser<S> for Concat<I, ($($ty,)*)>
         where
