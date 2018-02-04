@@ -228,3 +228,16 @@ define_concat_parsers!(
     p10: P10,
     p11: P11,
 );
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use stream::SliceStream;
+
+    #[test]
+    fn test_any_token() {
+        let mut p = any_token();
+        assert_eq!(p.parse(&mut SliceStream::new(b"hoge")).unwrap(), b'h');
+        assert!(p.parse(&mut SliceStream::new(b"")).is_err());
+    }
+}
