@@ -5,23 +5,29 @@ pub trait Stream {
     fn lookahead(&mut self, len: usize) -> ParseResult<()>;
     fn get(&self, idx: usize) -> &Self::Item;
     fn advance(&mut self, len: usize);
-    fn mark(&mut self) -> u64;
-    fn rollback(&mut self, pos: u64);
+    fn mark(&mut self) -> StreamMark;
+    fn rollback(&mut self, pos: StreamMark);
     fn commit(&mut self);
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct StreamMark {
+    pub position: u64,
+    pub depth: usize,
 }
 
 pub fn stream_transaction<R, S: Stream + ?Sized, F: FnOnce(&mut S) -> ParseResult<R>>(
     stream: &mut S,
     f: F,
 ) -> ParseResult<Option<R>> {
-    let pos = stream.mark();
+    let mark = stream.mark();
     match f(stream) {
         Ok(x) => {
             stream.commit();
             Ok(Some(x))
         }
         Err(e) => if e.is_recoverable() {
-            stream.rollback(pos);
+            stream.rollback(mark);
             Ok(None)
         } else {
             stream.commit();
@@ -64,11 +70,14 @@ impl<'a, T: Copy + 'a> Stream for SliceStream<'a, T> {
         assert!(self.position + len <= self.slice.len());
         self.position += len;
     }
-    fn mark(&mut self) -> u64 {
-        self.position as u64
+    fn mark(&mut self) -> StreamMark {
+        StreamMark {
+            position: self.position as u64,
+            depth: 0,
+        }
     }
-    fn rollback(&mut self, pos: u64) {
-        self.position = pos as usize;
+    fn rollback(&mut self, mark: StreamMark) {
+        self.position = mark.position as usize;
     }
     fn commit(&mut self) {}
 }
@@ -84,17 +93,19 @@ mod tests {
         assert_eq!(s.get(1), &b'e');
         assert_eq!(s.get(0), &b'H');
         s.advance(1); // [1] -- 2
-        assert_eq!(s.mark(), 1); // [1, 1] -- 2
+        let mark0 = s.mark();
+        assert_eq!(mark0.position, 1); // [1, 1] -- 2
         s.lookahead(1).unwrap(); // [1, 1] -- 2
         assert_eq!(s.get(0), &b'e');
         s.lookahead(2).unwrap(); // [1, 1] -- 3
         assert_eq!(s.get(1), &b'l');
         s.advance(2); // [1, 3] -- 3
-        assert_eq!(s.mark(), 3); // [1, 3, 3] -- 3
+        let mark1 = s.mark();
+        assert_eq!(mark1.position, 3); // [1, 3, 3] -- 3
         s.lookahead(1).unwrap(); // [1, 3, 3] -- 4
         assert_eq!(s.get(0), &b'l');
         s.commit(); // [1, 3] -- 4
-        s.rollback(1); // [1] -- 4
+        s.rollback(mark0); // [1] -- 4
         s.lookahead(4).unwrap(); // [1] -- 5
         assert_eq!(s.get(0), &b'e');
         assert_eq!(s.get(1), &b'l');
