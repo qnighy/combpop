@@ -1,5 +1,6 @@
 pub mod stream;
 pub mod combinators;
+pub mod byte;
 
 pub use stream::Stream;
 
