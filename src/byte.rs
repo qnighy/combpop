@@ -16,12 +16,6 @@ pub struct AnyChar(PhantomData<()>);
 impl ParserBase for AnyChar {
     type Input = u8;
     type Output = char;
-    fn nonempty() -> bool
-    where
-        Self: Sized,
-    {
-        true
-    }
 }
 impl<S: Stream<Item = u8> + ?Sized> Parser<S> for AnyChar {
     delegate_parser!(&mut char(|_| true));
@@ -36,12 +30,6 @@ pub struct Char<F: FnMut(char) -> bool>(F);
 impl<F: FnMut(char) -> bool> ParserBase for Char<F> {
     type Input = u8;
     type Output = char;
-    fn nonempty() -> bool
-    where
-        Self: Sized,
-    {
-        true
-    }
 }
 impl<F: FnMut(char) -> bool, S: Stream<Item = u8> + ?Sized> Parser<S> for Char<F> {
     fn parse_lookahead(&mut self, stream: &mut S) -> ParseResult<Option<(char, Consume)>> {

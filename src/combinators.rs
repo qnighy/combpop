@@ -10,12 +10,6 @@ pub struct AnyToken<I: Clone>(PhantomData<fn(I)>);
 impl<I: Clone> ParserBase for AnyToken<I> {
     type Input = I;
     type Output = I;
-    fn nonempty() -> bool
-    where
-        Self: Sized,
-    {
-        true
-    }
 }
 impl<I: Clone, S: Stream<Item = I> + ?Sized> Parser<S> for AnyToken<I> {
     delegate_parser!(&mut token(|_| true));
@@ -30,12 +24,6 @@ pub struct Token<I: Clone, F: FnMut(&I) -> bool>(F, PhantomData<fn(I)>);
 impl<I: Clone, F: FnMut(&I) -> bool> ParserBase for Token<I, F> {
     type Input = I;
     type Output = I;
-    fn nonempty() -> bool
-    where
-        Self: Sized,
-    {
-        true
-    }
 }
 impl<I: Clone, S: Stream<Item = I> + ?Sized, F: FnMut(&I) -> bool> Parser<S> for Token<I, F> {
     fn parse_lookahead(&mut self, stream: &mut S) -> ParseResult<Option<(I, Consume)>> {
@@ -81,17 +69,11 @@ where
 {
     type Input = P0::Input;
     type Output = P1::Output;
-    fn nonempty() -> bool
+    fn emptiable() -> bool
     where
         Self: Sized,
     {
-        P0::nonempty() || P1::nonempty()
-    }
-    fn no_backtrack() -> bool
-    where
-        Self: Sized,
-    {
-        P0::no_backtrack() && P1::no_backtrack()
+        P0::emptiable() && P1::emptiable()
     }
 }
 
@@ -104,16 +86,6 @@ where
 {
     fn parse_lookahead(&mut self, stream: &mut S) -> ParseResult<Option<(Self::Output, Consume)>> {
         let AndThen(ref mut p0, ref mut f) = *self;
-        if P0::nonempty() {
-            let x = if let Some((x, _)) = p0.parse_lookahead(stream)? {
-                x
-            } else {
-                return Ok(None);
-            };
-            let mut p1 = f(x);
-            let y = p1.parse(stream)?;
-            return Ok(Some((y, Consume::Consumed)));
-        }
         let (x, consumed) = if let Some((x, c)) = p0.parse_lookahead(stream)? {
             (x, c)
         } else {
@@ -121,12 +93,8 @@ where
         };
         let mut p1 = f(x);
         if let Some((y, c)) = p1.parse_lookahead(stream)? {
-            if (consumed | c) == Consume::Empty {
-                p1.emit_expectations(stream);
-            }
             Ok(Some((y, consumed | c)))
         } else if consumed == Consume::Empty {
-            p1.emit_expectations(stream);
             Ok(None)
         } else {
             Err(ParseError::SyntaxError)
@@ -135,6 +103,10 @@ where
     fn emit_expectations(&mut self, stream: &mut S) {
         let AndThen(ref mut p0, _) = *self;
         p0.emit_expectations(stream);
+        if P0::emptiable() {
+            // FIXME
+            // p1.emit_expectations(stream);
+        }
     }
 }
 

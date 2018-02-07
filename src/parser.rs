@@ -60,13 +60,7 @@ impl ::std::ops::BitOrAssign for Consume {
 pub trait ParserBase {
     type Input;
     type Output;
-    fn nonempty() -> bool
-    where
-        Self: Sized,
-    {
-        false
-    }
-    fn no_backtrack() -> bool
+    fn emptiable() -> bool
     where
         Self: Sized,
     {
@@ -111,7 +105,7 @@ macro_rules! delegate_parser {
             Parser::parse_lookahead($this, stream)
         }
         fn emit_expectations(&mut self, stream: &mut S) {
-            Parser::emit_expectations($this, stream)
+            Parser::emit_expectations($this, stream);
         }
     }
 }
