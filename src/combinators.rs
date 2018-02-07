@@ -110,6 +110,64 @@ where
     }
 }
 
+pub(crate) fn concat2<P0, P1>(p0: P0, p1: P1) -> Concat2<P0, P1>
+where
+    P0: ParserBase,
+    P1: ParserBase<Input = P0::Input>,
+{
+    Concat2(p0, p1)
+}
+
+pub struct Concat2<P0, P1>(P0, P1)
+where
+    P0: ParserBase,
+    P1: ParserBase<Input = P0::Input>;
+
+impl<P0, P1> ParserBase for Concat2<P0, P1>
+where
+    P0: ParserBase,
+    P1: ParserBase<Input = P0::Input>,
+{
+    type Input = P0::Input;
+    type Output = (P0::Output, P1::Output);
+    fn emptiable() -> bool
+    where
+        Self: Sized,
+    {
+        P0::emptiable() && P1::emptiable()
+    }
+}
+
+impl<S, P0, P1> Parser<S> for Concat2<P0, P1>
+where
+    S: Stream<Item = P0::Input>,
+    P0: Parser<S>,
+    P1: Parser<S, Input = P0::Input>,
+{
+    fn parse_lookahead(&mut self, stream: &mut S) -> ParseResult<Option<(Self::Output, Consume)>> {
+        let Concat2(ref mut p0, ref mut p1) = *self;
+        let (x, consumed) = if let Some((x, c)) = p0.parse_lookahead(stream)? {
+            (x, c)
+        } else {
+            return Ok(None);
+        };
+        if let Some((y, c)) = p1.parse_lookahead(stream)? {
+            Ok(Some(((x, y), consumed | c)))
+        } else if consumed == Consume::Empty {
+            Ok(None)
+        } else {
+            Err(ParseError::SyntaxError)
+        }
+    }
+    fn emit_expectations(&mut self, stream: &mut S) {
+        let Concat2(ref mut p0, ref mut p1) = *self;
+        p0.emit_expectations(stream);
+        if P0::emptiable() {
+            p1.emit_expectations(stream);
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

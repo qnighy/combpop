@@ -75,6 +75,14 @@ pub trait ParserBase {
     {
         combinators::and_then(self, f)
     }
+
+    fn concat<P>(self, p: P) -> combinators::Concat2<Self, P>
+    where
+        Self: Sized,
+        P: ParserBase<Input = Self::Input>,
+    {
+        combinators::concat2(self, p)
+    }
 }
 pub trait Parser<S: Stream<Item = Self::Input> + ?Sized>: ParserBase {
     fn parse(&mut self, stream: &mut S) -> ParseResult<Self::Output> {
