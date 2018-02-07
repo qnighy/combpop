@@ -1,6 +1,6 @@
 use std::char;
 use std::marker::PhantomData;
-use {Consume, ParseError, ParseResult, Parser, ParserBase, Stream};
+use {Consume, ParseError, ParseResult, Parser, ParserBase, ParserOnce, Stream};
 use combinators::{any_token, AnyToken};
 
 pub fn any_byte() -> AnyToken<u8> {
@@ -17,22 +17,29 @@ impl ParserBase for AnyChar {
     type Input = u8;
     type Output = char;
 }
+impl<S: Stream<Item = u8> + ?Sized> ParserOnce<S> for AnyChar {
+    delegate_parser_once!(char(|_| true));
+}
 impl<S: Stream<Item = u8> + ?Sized> Parser<S> for AnyChar {
     delegate_parser!(&mut char(|_| true));
+}
+
+pub fn char_once<F: FnOnce(char) -> bool>(f: F) -> Char<F> {
+    Char(f)
 }
 
 pub fn char<F: FnMut(char) -> bool>(f: F) -> Char<F> {
     Char(f)
 }
 
-pub struct Char<F: FnMut(char) -> bool>(F);
+pub struct Char<F: FnOnce(char) -> bool>(F);
 
-impl<F: FnMut(char) -> bool> ParserBase for Char<F> {
+impl<F: FnOnce(char) -> bool> ParserBase for Char<F> {
     type Input = u8;
     type Output = char;
 }
-impl<F: FnMut(char) -> bool, S: Stream<Item = u8> + ?Sized> Parser<S> for Char<F> {
-    fn parse_lookahead(&mut self, stream: &mut S) -> ParseResult<Option<(char, Consume)>> {
+impl<F: FnOnce(char) -> bool, S: Stream<Item = u8> + ?Sized> ParserOnce<S> for Char<F> {
+    fn parse_lookahead_once(self, stream: &mut S) -> ParseResult<Option<(char, Consume)>> {
         let b0 = match stream.lookahead(1) {
             Ok(()) => *stream.get(0),
             Err(ParseError::EOF) => return Ok(None),
@@ -87,6 +94,11 @@ impl<F: FnMut(char) -> bool, S: Stream<Item = u8> + ?Sized> Parser<S> for Char<F
         }
         stream.advance(n);
         Ok(Some((c, Consume::Consumed)))
+    }
+}
+impl<F: FnMut(char) -> bool, S: Stream<Item = u8> + ?Sized> Parser<S> for Char<F> {
+    fn parse_lookahead(&mut self, stream: &mut S) -> ParseResult<Option<(char, Consume)>> {
+        ParserOnce::parse_lookahead_once(char_once(&mut self.0), stream)
     }
     fn emit_expectations(&mut self, _stream: &mut S) {
         // TODO

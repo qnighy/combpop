@@ -84,7 +84,12 @@ pub trait ParserBase {
         combinators::concat2(self, p)
     }
 }
-pub trait Parser<S: Stream<Item = Self::Input> + ?Sized>: ParserBase {
+pub trait ParserOnce<S: Stream<Item = Self::Input> + ?Sized>: ParserBase {
+    fn parse_lookahead_once(self, stream: &mut S) -> ParseResult<Option<(Self::Output, Consume)>>
+    where
+        Self: Sized;
+}
+pub trait Parser<S: Stream<Item = Self::Input> + ?Sized>: ParserOnce<S> {
     fn parse(&mut self, stream: &mut S) -> ParseResult<Self::Output> {
         Ok(self.parse_consume(stream)?.0)
     }
@@ -100,6 +105,17 @@ pub trait Parser<S: Stream<Item = Self::Input> + ?Sized>: ParserBase {
     fn emit_expectations(&mut self, stream: &mut S);
 }
 
+macro_rules! delegate_parser_once {
+    ($this:expr) => {
+        fn parse_lookahead_once(self, stream: &mut S)
+            -> ParseResult<Option<(Self::Output, Consume)>>
+        where
+            Self: Sized,
+        {
+            ParserOnce::parse_lookahead_once($this, stream)
+        }
+    }
+}
 macro_rules! delegate_parser {
     ($this:expr) => {
         fn parse(&mut self, stream: &mut S) -> ParseResult<Self::Output> {

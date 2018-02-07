@@ -1,5 +1,5 @@
 use std::marker::PhantomData;
-use {Consume, ParseError, ParseResult, Parser, ParserBase, Stream};
+use {Consume, ParseError, ParseResult, Parser, ParserBase, ParserOnce, Stream};
 
 pub fn any_token<I: Clone>() -> AnyToken<I> {
     AnyToken(PhantomData)
@@ -11,22 +11,29 @@ impl<I: Clone> ParserBase for AnyToken<I> {
     type Input = I;
     type Output = I;
 }
+impl<I: Clone, S: Stream<Item = I> + ?Sized> ParserOnce<S> for AnyToken<I> {
+    delegate_parser_once!(token(|_| true));
+}
 impl<I: Clone, S: Stream<Item = I> + ?Sized> Parser<S> for AnyToken<I> {
     delegate_parser!(&mut token(|_| true));
+}
+
+pub fn token_once<I: Clone, F: FnOnce(&I) -> bool>(f: F) -> Token<I, F> {
+    Token(f, PhantomData)
 }
 
 pub fn token<I: Clone, F: FnMut(&I) -> bool>(f: F) -> Token<I, F> {
     Token(f, PhantomData)
 }
 
-pub struct Token<I: Clone, F: FnMut(&I) -> bool>(F, PhantomData<fn(I)>);
+pub struct Token<I: Clone, F: FnOnce(&I) -> bool>(F, PhantomData<fn(I)>);
 
-impl<I: Clone, F: FnMut(&I) -> bool> ParserBase for Token<I, F> {
+impl<I: Clone, F: FnOnce(&I) -> bool> ParserBase for Token<I, F> {
     type Input = I;
     type Output = I;
 }
-impl<I: Clone, S: Stream<Item = I> + ?Sized, F: FnMut(&I) -> bool> Parser<S> for Token<I, F> {
-    fn parse_lookahead(&mut self, stream: &mut S) -> ParseResult<Option<(I, Consume)>> {
+impl<I: Clone, S: Stream<Item = I> + ?Sized, F: FnOnce(&I) -> bool> ParserOnce<S> for Token<I, F> {
+    fn parse_lookahead_once(self, stream: &mut S) -> ParseResult<Option<(I, Consume)>> {
         match stream.lookahead(1) {
             Ok(()) => {
                 if (self.0)(stream.get(0)) {
@@ -41,6 +48,11 @@ impl<I: Clone, S: Stream<Item = I> + ?Sized, F: FnMut(&I) -> bool> Parser<S> for
             Err(e) => Err(e),
         }
     }
+}
+impl<I: Clone, S: Stream<Item = I> + ?Sized, F: FnMut(&I) -> bool> Parser<S> for Token<I, F> {
+    fn parse_lookahead(&mut self, stream: &mut S) -> ParseResult<Option<(I, Consume)>> {
+        ParserOnce::parse_lookahead_once(token(&mut self.0), stream)
+    }
     fn emit_expectations(&mut self, _stream: &mut S) {
         // TODO
     }
@@ -50,7 +62,7 @@ pub(crate) fn and_then<P0, P1, F>(p0: P0, f: F) -> AndThen<P0, P1, F>
 where
     P0: ParserBase,
     P1: ParserBase<Input = P0::Input>,
-    F: FnMut(P0::Output) -> P1,
+    F: FnOnce(P0::Output) -> P1,
 {
     AndThen(p0, f)
 }
@@ -59,13 +71,13 @@ pub struct AndThen<P0, P1, F>(P0, F)
 where
     P0: ParserBase,
     P1: ParserBase<Input = P0::Input>,
-    F: FnMut(P0::Output) -> P1;
+    F: FnOnce(P0::Output) -> P1;
 
 impl<P0, P1, F> ParserBase for AndThen<P0, P1, F>
 where
     P0: ParserBase,
     P1: ParserBase<Input = P0::Input>,
-    F: FnMut(P0::Output) -> P1,
+    F: FnOnce(P0::Output) -> P1,
 {
     type Input = P0::Input;
     type Output = P1::Output;
@@ -77,11 +89,36 @@ where
     }
 }
 
+impl<S, P0, P1, F> ParserOnce<S> for AndThen<P0, P1, F>
+where
+    S: Stream<Item = P0::Input>,
+    P0: ParserOnce<S>,
+    P1: ParserOnce<S, Input = P0::Input>,
+    F: FnOnce(P0::Output) -> P1,
+{
+    fn parse_lookahead_once(self, stream: &mut S) -> ParseResult<Option<(Self::Output, Consume)>> {
+        let AndThen(p0, f) = self;
+        let (x, consumed) = if let Some((x, c)) = p0.parse_lookahead_once(stream)? {
+            (x, c)
+        } else {
+            return Ok(None);
+        };
+        let p1 = f(x);
+        if let Some((y, c)) = p1.parse_lookahead_once(stream)? {
+            Ok(Some((y, consumed | c)))
+        } else if consumed == Consume::Empty {
+            Ok(None)
+        } else {
+            Err(ParseError::SyntaxError)
+        }
+    }
+}
+
 impl<S, P0, P1, F> Parser<S> for AndThen<P0, P1, F>
 where
     S: Stream<Item = P0::Input>,
     P0: Parser<S>,
-    P1: Parser<S, Input = P0::Input>,
+    P1: ParserOnce<S, Input = P0::Input>,
     F: FnMut(P0::Output) -> P1,
 {
     fn parse_lookahead(&mut self, stream: &mut S) -> ParseResult<Option<(Self::Output, Consume)>> {
@@ -91,8 +128,8 @@ where
         } else {
             return Ok(None);
         };
-        let mut p1 = f(x);
-        if let Some((y, c)) = p1.parse_lookahead(stream)? {
+        let p1 = f(x);
+        if let Some((y, c)) = p1.parse_lookahead_once(stream)? {
             Ok(Some((y, consumed | c)))
         } else if consumed == Consume::Empty {
             Ok(None)
@@ -135,6 +172,29 @@ where
         Self: Sized,
     {
         P0::emptiable() && P1::emptiable()
+    }
+}
+
+impl<S, P0, P1> ParserOnce<S> for Concat2<P0, P1>
+where
+    S: Stream<Item = P0::Input>,
+    P0: ParserOnce<S>,
+    P1: ParserOnce<S, Input = P0::Input>,
+{
+    fn parse_lookahead_once(self, stream: &mut S) -> ParseResult<Option<(Self::Output, Consume)>> {
+        let Concat2(p0, p1) = self;
+        let (x, consumed) = if let Some((x, c)) = p0.parse_lookahead_once(stream)? {
+            (x, c)
+        } else {
+            return Ok(None);
+        };
+        if let Some((y, c)) = p1.parse_lookahead_once(stream)? {
+            Ok(Some(((x, y), consumed | c)))
+        } else if consumed == Consume::Empty {
+            Ok(None)
+        } else {
+            Err(ParseError::SyntaxError)
+        }
     }
 }
 
