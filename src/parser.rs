@@ -89,11 +89,29 @@ pub trait ParserOnce<S: Stream<Item = Self::Input> + ?Sized>: ParserBase {
     where
         Self: Sized;
 }
-pub trait Parser<S: Stream<Item = Self::Input> + ?Sized>: ParserOnce<S> {
-    fn parse(&mut self, stream: &mut S) -> ParseResult<Self::Output> {
+pub trait ParserMut<S: Stream<Item = Self::Input> + ?Sized>: ParserOnce<S> {
+    fn parse_mut(&mut self, stream: &mut S) -> ParseResult<Self::Output> {
+        Ok(self.parse_consume_mut(stream)?.0)
+    }
+    fn parse_consume_mut(&mut self, stream: &mut S) -> ParseResult<(Self::Output, Consume)> {
+        if let Some(x) = self.parse_lookahead_mut(stream)? {
+            Ok(x)
+        } else {
+            self.emit_expectations_mut(stream);
+            Err(ParseError::SyntaxError)
+        }
+    }
+    fn parse_lookahead_mut(
+        &mut self,
+        stream: &mut S,
+    ) -> ParseResult<Option<(Self::Output, Consume)>>;
+    fn emit_expectations_mut(&mut self, stream: &mut S);
+}
+pub trait Parser<S: Stream<Item = Self::Input> + ?Sized>: ParserMut<S> {
+    fn parse(&self, stream: &mut S) -> ParseResult<Self::Output> {
         Ok(self.parse_consume(stream)?.0)
     }
-    fn parse_consume(&mut self, stream: &mut S) -> ParseResult<(Self::Output, Consume)> {
+    fn parse_consume(&self, stream: &mut S) -> ParseResult<(Self::Output, Consume)> {
         if let Some(x) = self.parse_lookahead(stream)? {
             Ok(x)
         } else {
@@ -101,8 +119,8 @@ pub trait Parser<S: Stream<Item = Self::Input> + ?Sized>: ParserOnce<S> {
             Err(ParseError::SyntaxError)
         }
     }
-    fn parse_lookahead(&mut self, stream: &mut S) -> ParseResult<Option<(Self::Output, Consume)>>;
-    fn emit_expectations(&mut self, stream: &mut S);
+    fn parse_lookahead(&self, stream: &mut S) -> ParseResult<Option<(Self::Output, Consume)>>;
+    fn emit_expectations(&self, stream: &mut S);
 }
 
 macro_rules! delegate_parser_once {
@@ -116,19 +134,36 @@ macro_rules! delegate_parser_once {
         }
     }
 }
+macro_rules! delegate_parser_mut {
+    ($this:expr) => {
+        fn parse_mut(&mut self, stream: &mut S) -> ParseResult<Self::Output> {
+            ParserMut::parse_mut($this, stream)
+        }
+        fn parse_consume_mut(&mut self, stream: &mut S) -> ParseResult<(Self::Output, Consume)> {
+            ParserMut::parse_consume_mut($this, stream)
+        }
+        fn parse_lookahead_mut(&mut self, stream: &mut S)
+            -> ParseResult<Option<(Self::Output, Consume)>> {
+            ParserMut::parse_lookahead_mut($this, stream)
+        }
+        fn emit_expectations_mut(&mut self, stream: &mut S) {
+            ParserMut::emit_expectations_mut($this, stream);
+        }
+    }
+}
 macro_rules! delegate_parser {
     ($this:expr) => {
-        fn parse(&mut self, stream: &mut S) -> ParseResult<Self::Output> {
+        fn parse(&self, stream: &mut S) -> ParseResult<Self::Output> {
             Parser::parse($this, stream)
         }
-        fn parse_consume(&mut self, stream: &mut S) -> ParseResult<(Self::Output, Consume)> {
+        fn parse_consume(&self, stream: &mut S) -> ParseResult<(Self::Output, Consume)> {
             Parser::parse_consume($this, stream)
         }
-        fn parse_lookahead(&mut self, stream: &mut S)
+        fn parse_lookahead(&self, stream: &mut S)
             -> ParseResult<Option<(Self::Output, Consume)>> {
             Parser::parse_lookahead($this, stream)
         }
-        fn emit_expectations(&mut self, stream: &mut S) {
+        fn emit_expectations(&self, stream: &mut S) {
             Parser::emit_expectations($this, stream);
         }
     }

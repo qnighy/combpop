@@ -1,5 +1,5 @@
 use std::marker::PhantomData;
-use {Consume, ParseError, ParseResult, Parser, ParserBase, ParserOnce, Stream};
+use {Consume, ParseError, ParseResult, Parser, ParserBase, ParserMut, ParserOnce, Stream};
 
 pub fn any_token<I: Clone>() -> AnyToken<I> {
     AnyToken(PhantomData)
@@ -14,15 +14,22 @@ impl<I: Clone> ParserBase for AnyToken<I> {
 impl<I: Clone, S: Stream<Item = I> + ?Sized> ParserOnce<S> for AnyToken<I> {
     delegate_parser_once!(token(|_| true));
 }
+impl<I: Clone, S: Stream<Item = I> + ?Sized> ParserMut<S> for AnyToken<I> {
+    delegate_parser_mut!(&mut token(|_| true));
+}
 impl<I: Clone, S: Stream<Item = I> + ?Sized> Parser<S> for AnyToken<I> {
-    delegate_parser!(&mut token(|_| true));
+    delegate_parser!(&token(|_| true));
 }
 
 pub fn token_once<I: Clone, F: FnOnce(&I) -> bool>(f: F) -> Token<I, F> {
     Token(f, PhantomData)
 }
 
-pub fn token<I: Clone, F: FnMut(&I) -> bool>(f: F) -> Token<I, F> {
+pub fn token_mut<I: Clone, F: FnMut(&I) -> bool>(f: F) -> Token<I, F> {
+    Token(f, PhantomData)
+}
+
+pub fn token<I: Clone, F: Fn(&I) -> bool>(f: F) -> Token<I, F> {
     Token(f, PhantomData)
 }
 
@@ -49,11 +56,19 @@ impl<I: Clone, S: Stream<Item = I> + ?Sized, F: FnOnce(&I) -> bool> ParserOnce<S
         }
     }
 }
-impl<I: Clone, S: Stream<Item = I> + ?Sized, F: FnMut(&I) -> bool> Parser<S> for Token<I, F> {
-    fn parse_lookahead(&mut self, stream: &mut S) -> ParseResult<Option<(I, Consume)>> {
-        ParserOnce::parse_lookahead_once(token(&mut self.0), stream)
+impl<I: Clone, S: Stream<Item = I> + ?Sized, F: FnMut(&I) -> bool> ParserMut<S> for Token<I, F> {
+    fn parse_lookahead_mut(&mut self, stream: &mut S) -> ParseResult<Option<(I, Consume)>> {
+        ParserOnce::parse_lookahead_once(token_mut(&mut self.0), stream)
     }
-    fn emit_expectations(&mut self, _stream: &mut S) {
+    fn emit_expectations_mut(&mut self, _stream: &mut S) {
+        // TODO
+    }
+}
+impl<I: Clone, S: Stream<Item = I> + ?Sized, F: Fn(&I) -> bool> Parser<S> for Token<I, F> {
+    fn parse_lookahead(&self, stream: &mut S) -> ParseResult<Option<(I, Consume)>> {
+        ParserOnce::parse_lookahead_once(token(&self.0), stream)
+    }
+    fn emit_expectations(&self, _stream: &mut S) {
         // TODO
     }
 }
@@ -114,15 +129,51 @@ where
     }
 }
 
+impl<S, P0, P1, F> ParserMut<S> for AndThen<P0, P1, F>
+where
+    S: Stream<Item = P0::Input>,
+    P0: ParserMut<S>,
+    P1: ParserOnce<S, Input = P0::Input>,
+    F: FnMut(P0::Output) -> P1,
+{
+    fn parse_lookahead_mut(
+        &mut self,
+        stream: &mut S,
+    ) -> ParseResult<Option<(Self::Output, Consume)>> {
+        let AndThen(ref mut p0, ref mut f) = *self;
+        let (x, consumed) = if let Some((x, c)) = p0.parse_lookahead_mut(stream)? {
+            (x, c)
+        } else {
+            return Ok(None);
+        };
+        let p1 = f(x);
+        if let Some((y, c)) = p1.parse_lookahead_once(stream)? {
+            Ok(Some((y, consumed | c)))
+        } else if consumed == Consume::Empty {
+            Ok(None)
+        } else {
+            Err(ParseError::SyntaxError)
+        }
+    }
+    fn emit_expectations_mut(&mut self, stream: &mut S) {
+        let AndThen(ref mut p0, _) = *self;
+        p0.emit_expectations_mut(stream);
+        if P0::emptiable() {
+            // FIXME
+            // p1.emit_expectations_mut(stream);
+        }
+    }
+}
+
 impl<S, P0, P1, F> Parser<S> for AndThen<P0, P1, F>
 where
     S: Stream<Item = P0::Input>,
     P0: Parser<S>,
     P1: ParserOnce<S, Input = P0::Input>,
-    F: FnMut(P0::Output) -> P1,
+    F: Fn(P0::Output) -> P1,
 {
-    fn parse_lookahead(&mut self, stream: &mut S) -> ParseResult<Option<(Self::Output, Consume)>> {
-        let AndThen(ref mut p0, ref mut f) = *self;
+    fn parse_lookahead(&self, stream: &mut S) -> ParseResult<Option<(Self::Output, Consume)>> {
+        let AndThen(ref p0, ref f) = *self;
         let (x, consumed) = if let Some((x, c)) = p0.parse_lookahead(stream)? {
             (x, c)
         } else {
@@ -137,8 +188,8 @@ where
             Err(ParseError::SyntaxError)
         }
     }
-    fn emit_expectations(&mut self, stream: &mut S) {
-        let AndThen(ref mut p0, _) = *self;
+    fn emit_expectations(&self, stream: &mut S) {
+        let AndThen(ref p0, _) = *self;
         p0.emit_expectations(stream);
         if P0::emptiable() {
             // FIXME
@@ -198,14 +249,47 @@ where
     }
 }
 
+impl<S, P0, P1> ParserMut<S> for Concat2<P0, P1>
+where
+    S: Stream<Item = P0::Input>,
+    P0: ParserMut<S>,
+    P1: ParserMut<S, Input = P0::Input>,
+{
+    fn parse_lookahead_mut(
+        &mut self,
+        stream: &mut S,
+    ) -> ParseResult<Option<(Self::Output, Consume)>> {
+        let Concat2(ref mut p0, ref mut p1) = *self;
+        let (x, consumed) = if let Some((x, c)) = p0.parse_lookahead_mut(stream)? {
+            (x, c)
+        } else {
+            return Ok(None);
+        };
+        if let Some((y, c)) = p1.parse_lookahead_mut(stream)? {
+            Ok(Some(((x, y), consumed | c)))
+        } else if consumed == Consume::Empty {
+            Ok(None)
+        } else {
+            Err(ParseError::SyntaxError)
+        }
+    }
+    fn emit_expectations_mut(&mut self, stream: &mut S) {
+        let Concat2(ref mut p0, ref mut p1) = *self;
+        p0.emit_expectations_mut(stream);
+        if P0::emptiable() {
+            p1.emit_expectations_mut(stream);
+        }
+    }
+}
+
 impl<S, P0, P1> Parser<S> for Concat2<P0, P1>
 where
     S: Stream<Item = P0::Input>,
     P0: Parser<S>,
     P1: Parser<S, Input = P0::Input>,
 {
-    fn parse_lookahead(&mut self, stream: &mut S) -> ParseResult<Option<(Self::Output, Consume)>> {
-        let Concat2(ref mut p0, ref mut p1) = *self;
+    fn parse_lookahead(&self, stream: &mut S) -> ParseResult<Option<(Self::Output, Consume)>> {
+        let Concat2(ref p0, ref p1) = *self;
         let (x, consumed) = if let Some((x, c)) = p0.parse_lookahead(stream)? {
             (x, c)
         } else {
@@ -219,8 +303,8 @@ where
             Err(ParseError::SyntaxError)
         }
     }
-    fn emit_expectations(&mut self, stream: &mut S) {
-        let Concat2(ref mut p0, ref mut p1) = *self;
+    fn emit_expectations(&self, stream: &mut S) {
+        let Concat2(ref p0, ref p1) = *self;
         p0.emit_expectations(stream);
         if P0::emptiable() {
             p1.emit_expectations(stream);
@@ -235,7 +319,7 @@ mod tests {
 
     #[test]
     fn test_any_token() {
-        let mut p = any_token();
+        let p = any_token();
         assert_eq!(p.parse(&mut SliceStream::new(b"hoge")).unwrap(), b'h');
         assert!(p.parse(&mut SliceStream::new(b"")).is_err());
     }
