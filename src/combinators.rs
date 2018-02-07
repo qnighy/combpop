@@ -58,6 +58,86 @@ impl<I: Clone, S: Stream<Item = I> + ?Sized, F: FnMut(&I) -> bool> Parser<S> for
     }
 }
 
+pub(crate) fn and_then<P0, P1, F>(p0: P0, f: F) -> AndThen<P0, P1, F>
+where
+    P0: ParserBase,
+    P1: ParserBase<Input = P0::Input>,
+    F: FnMut(P0::Output) -> P1,
+{
+    AndThen(p0, f)
+}
+
+pub struct AndThen<P0, P1, F>(P0, F)
+where
+    P0: ParserBase,
+    P1: ParserBase<Input = P0::Input>,
+    F: FnMut(P0::Output) -> P1;
+
+impl<P0, P1, F> ParserBase for AndThen<P0, P1, F>
+where
+    P0: ParserBase,
+    P1: ParserBase<Input = P0::Input>,
+    F: FnMut(P0::Output) -> P1,
+{
+    type Input = P0::Input;
+    type Output = P1::Output;
+    fn nonempty() -> bool
+    where
+        Self: Sized,
+    {
+        P0::nonempty() || P1::nonempty()
+    }
+    fn no_backtrack() -> bool
+    where
+        Self: Sized,
+    {
+        P0::no_backtrack() && P1::no_backtrack()
+    }
+}
+
+impl<S, P0, P1, F> Parser<S> for AndThen<P0, P1, F>
+where
+    S: Stream<Item = P0::Input>,
+    P0: Parser<S>,
+    P1: Parser<S, Input = P0::Input>,
+    F: FnMut(P0::Output) -> P1,
+{
+    fn parse_lookahead(&mut self, stream: &mut S) -> ParseResult<Option<(Self::Output, Consume)>> {
+        let AndThen(ref mut p0, ref mut f) = *self;
+        if P0::nonempty() {
+            let x = if let Some((x, _)) = p0.parse_lookahead(stream)? {
+                x
+            } else {
+                return Ok(None);
+            };
+            let mut p1 = f(x);
+            let y = p1.parse(stream)?;
+            return Ok(Some((y, Consume::Consumed)));
+        }
+        let (x, consumed) = if let Some((x, c)) = p0.parse_lookahead(stream)? {
+            (x, c)
+        } else {
+            return Ok(None);
+        };
+        let mut p1 = f(x);
+        if let Some((y, c)) = p1.parse_lookahead(stream)? {
+            if (consumed | c) == Consume::Empty {
+                p1.emit_expectations(stream);
+            }
+            Ok(Some((y, consumed | c)))
+        } else if consumed == Consume::Empty {
+            p1.emit_expectations(stream);
+            Ok(None)
+        } else {
+            Err(ParseError::SyntaxError)
+        }
+    }
+    fn emit_expectations(&mut self, stream: &mut S) {
+        let AndThen(ref mut p0, _) = *self;
+        p0.emit_expectations(stream);
+    }
+}
+
 pub fn concat<I, P>(p: P) -> Concat<I, P>
 where
     Concat<I, P>: ParserBase,

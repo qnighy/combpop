@@ -1,4 +1,5 @@
 use Stream;
+use combinators;
 
 #[derive(Debug)]
 pub enum ParseError {
@@ -70,6 +71,15 @@ pub trait ParserBase {
         Self: Sized,
     {
         false
+    }
+
+    fn and_then<P, F>(self, f: F) -> combinators::AndThen<Self, P, F>
+    where
+        Self: Sized,
+        P: ParserBase<Input = Self::Input>,
+        F: FnMut(Self::Output) -> P,
+    {
+        combinators::and_then(self, f)
     }
 }
 pub trait Parser<S: Stream<Item = Self::Input> + ?Sized>: ParserBase {
