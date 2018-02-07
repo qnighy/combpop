@@ -24,12 +24,7 @@ impl ParserBase for AnyChar {
     }
 }
 impl<S: Stream<Item = u8> + ?Sized> Parser<S> for AnyChar {
-    fn parse_lookahead(&mut self, stream: &mut S) -> ParseResult<Option<(char, Consume)>> {
-        char(|_| true).parse_lookahead(stream)
-    }
-    fn emit_expectations(&mut self, _stream: &mut S) {
-        // TODO
-    }
+    delegate_parser!(&mut char(|_| true));
 }
 
 pub fn char<F: FnMut(char) -> bool>(f: F) -> Char<F> {

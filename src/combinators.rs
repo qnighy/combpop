@@ -18,20 +18,7 @@ impl<I: Clone> ParserBase for AnyToken<I> {
     }
 }
 impl<I: Clone, S: Stream<Item = I> + ?Sized> Parser<S> for AnyToken<I> {
-    fn parse_lookahead(&mut self, stream: &mut S) -> ParseResult<Option<(I, Consume)>> {
-        match stream.lookahead(1) {
-            Ok(()) => {
-                let x = stream.get(0).clone();
-                stream.advance(1);
-                Ok(Some((x, Consume::Consumed)))
-            }
-            Err(ParseError::EOF) => Ok(None),
-            Err(e) => Err(e),
-        }
-    }
-    fn emit_expectations(&mut self, _stream: &mut S) {
-        // TODO
-    }
+    delegate_parser!(&mut token(|_| true));
 }
 
 pub fn token<I: Clone, F: FnMut(&I) -> bool>(f: F) -> Token<I, F> {

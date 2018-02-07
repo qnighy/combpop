@@ -87,3 +87,21 @@ pub trait Parser<S: Stream<Item = Self::Input> + ?Sized>: ParserBase {
     fn parse_lookahead(&mut self, stream: &mut S) -> ParseResult<Option<(Self::Output, Consume)>>;
     fn emit_expectations(&mut self, stream: &mut S);
 }
+
+macro_rules! delegate_parser {
+    ($this:expr) => {
+        fn parse(&mut self, stream: &mut S) -> ParseResult<Self::Output> {
+            Parser::parse($this, stream)
+        }
+        fn parse_consume(&mut self, stream: &mut S) -> ParseResult<(Self::Output, Consume)> {
+            Parser::parse_consume($this, stream)
+        }
+        fn parse_lookahead(&mut self, stream: &mut S)
+            -> ParseResult<Option<(Self::Output, Consume)>> {
+            Parser::parse_lookahead($this, stream)
+        }
+        fn emit_expectations(&mut self, stream: &mut S) {
+            Parser::emit_expectations($this, stream)
+        }
+    }
+}
