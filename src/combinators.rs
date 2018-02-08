@@ -155,7 +155,7 @@ where
 
 impl<S, O, P, F> ParserOnce<S> for Map<O, P, F>
 where
-    S: Stream<Item = P::Input>,
+    S: Stream<Item = P::Input> + ?Sized,
     P: ParserOnce<S>,
     F: FnOnce(P::Output) -> O,
 {
@@ -175,7 +175,7 @@ where
 
 impl<S, O, P, F> ParserMut<S> for Map<O, P, F>
 where
-    S: Stream<Item = P::Input>,
+    S: Stream<Item = P::Input> + ?Sized,
     P: ParserMut<S>,
     F: FnMut(P::Output) -> O,
 {
@@ -194,7 +194,7 @@ where
 
 impl<S, O, P, F> Parser<S> for Map<O, P, F>
 where
-    S: Stream<Item = P::Input>,
+    S: Stream<Item = P::Input> + ?Sized,
     P: Parser<S>,
     F: Fn(P::Output) -> O,
 {
@@ -256,7 +256,7 @@ where
 
 impl<S, P0, P1, F> ParserOnce<S> for AndThen<P0, P1, F>
 where
-    S: Stream<Item = P0::Input>,
+    S: Stream<Item = P0::Input> + ?Sized,
     P0: ParserOnce<S>,
     P1: ParserOnce<S, Input = P0::Input>,
     F: FnOnce(P0::Output) -> P1,
@@ -289,7 +289,7 @@ where
 
 impl<S, P0, P1, F> ParserMut<S> for AndThen<P0, P1, F>
 where
-    S: Stream<Item = P0::Input>,
+    S: Stream<Item = P0::Input> + ?Sized,
     P0: ParserMut<S>,
     P1: ParserOnce<S, Input = P0::Input>,
     F: FnMut(P0::Output) -> P1,
@@ -317,7 +317,7 @@ where
 
 impl<S, P0, P1, F> Parser<S> for AndThen<P0, P1, F>
 where
-    S: Stream<Item = P0::Input>,
+    S: Stream<Item = P0::Input> + ?Sized,
     P0: Parser<S>,
     P1: ParserOnce<S, Input = P0::Input>,
     F: Fn(P0::Output) -> P1,
@@ -356,7 +356,7 @@ impl<I> ParserBase for Empty<I> {
 
 impl<S, I> ParserOnce<S> for Empty<I>
 where
-    S: Stream<Item = I>,
+    S: Stream<Item = I> + ?Sized,
 {
     fn parse_lookahead_once(self, _: &mut S) -> ParseResult<Option<(Self::Output, Consume)>> {
         Ok(Some(((), Consume::Empty)))
@@ -366,7 +366,7 @@ where
 
 impl<S, I> ParserMut<S> for Empty<I>
 where
-    S: Stream<Item = I>,
+    S: Stream<Item = I> + ?Sized,
 {
     fn parse_lookahead_mut(&mut self, _: &mut S) -> ParseResult<Option<(Self::Output, Consume)>> {
         Ok(Some(((), Consume::Empty)))
@@ -375,7 +375,7 @@ where
 
 impl<S, I> Parser<S> for Empty<I>
 where
-    S: Stream<Item = I>,
+    S: Stream<Item = I> + ?Sized,
 {
     fn parse_lookahead(&self, _: &mut S) -> ParseResult<Option<(Self::Output, Consume)>> {
         Ok(Some(((), Consume::Empty)))
@@ -409,7 +409,7 @@ where
 
 impl<S, P0, P1> ParserOnce<S> for Concat2<P0, P1>
 where
-    S: Stream<Item = P0::Input>,
+    S: Stream<Item = P0::Input> + ?Sized,
     P0: ParserOnce<S>,
     P1: ParserOnce<S, Input = P0::Input>,
 {
@@ -439,7 +439,7 @@ where
 
 impl<S, P0, P1> ParserMut<S> for Concat2<P0, P1>
 where
-    S: Stream<Item = P0::Input>,
+    S: Stream<Item = P0::Input> + ?Sized,
     P0: ParserMut<S>,
     P1: ParserMut<S, Input = P0::Input>,
 {
@@ -465,7 +465,7 @@ where
 
 impl<S, P0, P1> Parser<S> for Concat2<P0, P1>
 where
-    S: Stream<Item = P0::Input>,
+    S: Stream<Item = P0::Input> + ?Sized,
     P0: Parser<S>,
     P1: Parser<S, Input = P0::Input>,
 {
@@ -497,18 +497,18 @@ impl<I, O> ParserBase for Fail<I, O> {
         false
     }
 }
-impl<S: Stream<Item = I>, I, O> ParserOnce<S> for Fail<I, O> {
+impl<S: Stream<Item = I> + ?Sized, I, O> ParserOnce<S> for Fail<I, O> {
     fn parse_lookahead_once(self, _: &mut S) -> ParseResult<Option<(Self::Output, Consume)>> {
         Ok(None)
     }
     fn emit_expectations(&self, _: &mut S) {}
 }
-impl<S: Stream<Item = I>, I, O> ParserMut<S> for Fail<I, O> {
+impl<S: Stream<Item = I> + ?Sized, I, O> ParserMut<S> for Fail<I, O> {
     fn parse_lookahead_mut(&mut self, _: &mut S) -> ParseResult<Option<(Self::Output, Consume)>> {
         Ok(None)
     }
 }
-impl<S: Stream<Item = I>, I, O> Parser<S> for Fail<I, O> {
+impl<S: Stream<Item = I> + ?Sized, I, O> Parser<S> for Fail<I, O> {
     fn parse_lookahead(&self, _: &mut S) -> ParseResult<Option<(Self::Output, Consume)>> {
         Ok(None)
     }
@@ -536,7 +536,7 @@ where
         P0::emptiable() || P1::emptiable()
     }
 }
-impl<S: Stream<Item = P0::Input>, P0, P1> ParserOnce<S> for Choice2<P0, P1>
+impl<S: Stream<Item = P0::Input> + ?Sized, P0, P1> ParserOnce<S> for Choice2<P0, P1>
 where
     P0: ParserOnce<S>,
     P1: ParserOnce<S, Input = P0::Input, Output = P0::Output>,
@@ -555,7 +555,7 @@ where
         p1.emit_expectations(stream);
     }
 }
-impl<S: Stream<Item = P0::Input>, P0, P1> ParserMut<S> for Choice2<P0, P1>
+impl<S: Stream<Item = P0::Input> + ?Sized, P0, P1> ParserMut<S> for Choice2<P0, P1>
 where
     P0: ParserMut<S>,
     P1: ParserMut<S, Input = P0::Input, Output = P0::Output>,
@@ -572,7 +572,7 @@ where
         }
     }
 }
-impl<S: Stream<Item = P0::Input>, P0, P1> Parser<S> for Choice2<P0, P1>
+impl<S: Stream<Item = P0::Input> + ?Sized, P0, P1> Parser<S> for Choice2<P0, P1>
 where
     P0: Parser<S>,
     P1: Parser<S, Input = P0::Input, Output = P0::Output>,
