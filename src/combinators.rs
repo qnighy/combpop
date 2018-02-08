@@ -73,6 +73,45 @@ impl<I: Clone, S: Stream<Item = I> + ?Sized, F: Fn(&I) -> bool> Parser<S> for To
     }
 }
 
+pub fn eof<I>() -> Eof<I> {
+    Eof(PhantomData)
+}
+
+pub struct Eof<I>(PhantomData<fn(I)>);
+
+impl<I> ParserBase for Eof<I> {
+    type Input = I;
+    type Output = ();
+}
+impl<I, S: Stream<Item = I> + ?Sized> ParserOnce<S> for Eof<I> {
+    fn parse_lookahead_once(self, stream: &mut S) -> ParseResult<Option<(Self::Output, Consume)>> {
+        match stream.lookahead(1) {
+            Ok(()) => Ok(None),
+            Err(ParseError::EOF) => Ok(Some(((), Consume::Empty))),
+            Err(e) => Err(e),
+        }
+    }
+}
+impl<I, S: Stream<Item = I> + ?Sized> ParserMut<S> for Eof<I> {
+    fn parse_lookahead_mut(
+        &mut self,
+        stream: &mut S,
+    ) -> ParseResult<Option<(Self::Output, Consume)>> {
+        ParserOnce::parse_lookahead_once(eof(), stream)
+    }
+    fn emit_expectations_mut(&mut self, _stream: &mut S) {
+        // TODO
+    }
+}
+impl<I, S: Stream<Item = I> + ?Sized> Parser<S> for Eof<I> {
+    fn parse_lookahead(&self, stream: &mut S) -> ParseResult<Option<(Self::Output, Consume)>> {
+        ParserOnce::parse_lookahead_once(eof(), stream)
+    }
+    fn emit_expectations(&self, _stream: &mut S) {
+        // TODO
+    }
+}
+
 pub(crate) fn map_once<O, P, F>(p: P, f: F) -> Map<O, P, F>
 where
     P: ParserBase,
