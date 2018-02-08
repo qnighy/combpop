@@ -138,6 +138,7 @@ pub trait ParserOnce<S: Stream<Item = Self::Input> + ?Sized>: ParserBase {
     fn parse_lookahead_once(self, stream: &mut S) -> ParseResult<Option<(Self::Output, Consume)>>
     where
         Self: Sized;
+    fn emit_expectations(&self, stream: &mut S);
 }
 pub trait ParserMut<S: Stream<Item = Self::Input> + ?Sized>: ParserOnce<S> {
     fn parse_mut(&mut self, stream: &mut S) -> ParseResult<Self::Output> {
@@ -147,7 +148,7 @@ pub trait ParserMut<S: Stream<Item = Self::Input> + ?Sized>: ParserOnce<S> {
         if let Some(x) = self.parse_lookahead_mut(stream)? {
             Ok(x)
         } else {
-            self.emit_expectations_mut(stream);
+            self.emit_expectations(stream);
             Err(ParseError::SyntaxError)
         }
     }
@@ -155,7 +156,6 @@ pub trait ParserMut<S: Stream<Item = Self::Input> + ?Sized>: ParserOnce<S> {
         &mut self,
         stream: &mut S,
     ) -> ParseResult<Option<(Self::Output, Consume)>>;
-    fn emit_expectations_mut(&mut self, stream: &mut S);
 }
 pub trait Parser<S: Stream<Item = Self::Input> + ?Sized>: ParserMut<S> {
     fn parse(&self, stream: &mut S) -> ParseResult<Self::Output> {
@@ -170,7 +170,6 @@ pub trait Parser<S: Stream<Item = Self::Input> + ?Sized>: ParserMut<S> {
         }
     }
     fn parse_lookahead(&self, stream: &mut S) -> ParseResult<Option<(Self::Output, Consume)>>;
-    fn emit_expectations(&self, stream: &mut S);
 }
 
 macro_rules! delegate_parser_once {
@@ -196,9 +195,6 @@ macro_rules! delegate_parser_mut {
             -> ParseResult<Option<(Self::Output, Consume)>> {
             ParserMut::parse_lookahead_mut($this, stream)
         }
-        fn emit_expectations_mut(&mut self, stream: &mut S) {
-            ParserMut::emit_expectations_mut($this, stream);
-        }
     }
 }
 macro_rules! delegate_parser {
@@ -212,9 +208,6 @@ macro_rules! delegate_parser {
         fn parse_lookahead(&self, stream: &mut S)
             -> ParseResult<Option<(Self::Output, Consume)>> {
             Parser::parse_lookahead($this, stream)
-        }
-        fn emit_expectations(&self, stream: &mut S) {
-            Parser::emit_expectations($this, stream);
         }
     }
 }
