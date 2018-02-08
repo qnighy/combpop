@@ -91,11 +91,29 @@ pub trait ParserBase {
         combinators::map(self, f)
     }
 
-    fn and_then<P, F>(self, f: F) -> combinators::AndThen<Self, P, F>
+    fn and_then_once<P, F>(self, f: F) -> combinators::AndThen<Self, P, F>
+    where
+        Self: Sized,
+        P: ParserBase<Input = Self::Input>,
+        F: FnOnce(Self::Output) -> P,
+    {
+        combinators::and_then_once(self, f)
+    }
+
+    fn and_then_mut<P, F>(self, f: F) -> combinators::AndThen<Self, P, F>
     where
         Self: Sized,
         P: ParserBase<Input = Self::Input>,
         F: FnMut(Self::Output) -> P,
+    {
+        combinators::and_then_mut(self, f)
+    }
+
+    fn and_then<P, F>(self, f: F) -> combinators::AndThen<Self, P, F>
+    where
+        Self: Sized,
+        P: ParserBase<Input = Self::Input>,
+        F: Fn(Self::Output) -> P,
     {
         combinators::and_then(self, f)
     }

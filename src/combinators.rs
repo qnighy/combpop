@@ -176,11 +176,29 @@ where
     }
 }
 
-pub(crate) fn and_then<P0, P1, F>(p0: P0, f: F) -> AndThen<P0, P1, F>
+pub(crate) fn and_then_once<P0, P1, F>(p0: P0, f: F) -> AndThen<P0, P1, F>
 where
     P0: ParserBase,
     P1: ParserBase<Input = P0::Input>,
     F: FnOnce(P0::Output) -> P1,
+{
+    AndThen(p0, f)
+}
+
+pub(crate) fn and_then_mut<P0, P1, F>(p0: P0, f: F) -> AndThen<P0, P1, F>
+where
+    P0: ParserBase,
+    P1: ParserBase<Input = P0::Input>,
+    F: FnMut(P0::Output) -> P1,
+{
+    AndThen(p0, f)
+}
+
+pub(crate) fn and_then<P0, P1, F>(p0: P0, f: F) -> AndThen<P0, P1, F>
+where
+    P0: ParserBase,
+    P1: ParserBase<Input = P0::Input>,
+    F: Fn(P0::Output) -> P1,
 {
     AndThen(p0, f)
 }
