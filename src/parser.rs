@@ -67,6 +67,30 @@ pub trait ParserBase {
         false
     }
 
+    fn map_once<O, F>(self, f: F) -> combinators::Map<O, Self, F>
+    where
+        Self: Sized,
+        F: FnOnce(Self::Output) -> O,
+    {
+        combinators::map_once(self, f)
+    }
+
+    fn map_mut<O, F>(self, f: F) -> combinators::Map<O, Self, F>
+    where
+        Self: Sized,
+        F: FnMut(Self::Output) -> O,
+    {
+        combinators::map_mut(self, f)
+    }
+
+    fn map<O, F>(self, f: F) -> combinators::Map<O, Self, F>
+    where
+        Self: Sized,
+        F: Fn(Self::Output) -> O,
+    {
+        combinators::map(self, f)
+    }
+
     fn and_then<P, F>(self, f: F) -> combinators::AndThen<Self, P, F>
     where
         Self: Sized,

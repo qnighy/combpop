@@ -73,6 +73,109 @@ impl<I: Clone, S: Stream<Item = I> + ?Sized, F: Fn(&I) -> bool> Parser<S> for To
     }
 }
 
+pub(crate) fn map_once<O, P, F>(p: P, f: F) -> Map<O, P, F>
+where
+    P: ParserBase,
+    F: FnOnce(P::Output) -> O,
+{
+    Map(p, f)
+}
+
+pub(crate) fn map_mut<O, P, F>(p: P, f: F) -> Map<O, P, F>
+where
+    P: ParserBase,
+    F: FnMut(P::Output) -> O,
+{
+    Map(p, f)
+}
+
+pub(crate) fn map<O, P, F>(p: P, f: F) -> Map<O, P, F>
+where
+    P: ParserBase,
+    F: Fn(P::Output) -> O,
+{
+    Map(p, f)
+}
+
+pub struct Map<O, P, F>(P, F)
+where
+    P: ParserBase,
+    F: FnOnce(P::Output) -> O;
+
+impl<O, P, F> ParserBase for Map<O, P, F>
+where
+    P: ParserBase,
+    F: FnOnce(P::Output) -> O,
+{
+    type Input = P::Input;
+    type Output = O;
+    fn emptiable() -> bool
+    where
+        Self: Sized,
+    {
+        false
+    }
+}
+
+impl<S, O, P, F> ParserOnce<S> for Map<O, P, F>
+where
+    S: Stream<Item = P::Input>,
+    P: ParserOnce<S>,
+    F: FnOnce(P::Output) -> O,
+{
+    fn parse_lookahead_once(self, stream: &mut S) -> ParseResult<Option<(Self::Output, Consume)>> {
+        let Map(p, f) = self;
+        if let Some((x, c)) = p.parse_lookahead_once(stream)? {
+            Ok(Some((f(x), c)))
+        } else {
+            Ok(None)
+        }
+    }
+}
+
+impl<S, O, P, F> ParserMut<S> for Map<O, P, F>
+where
+    S: Stream<Item = P::Input>,
+    P: ParserMut<S>,
+    F: FnMut(P::Output) -> O,
+{
+    fn parse_lookahead_mut(
+        &mut self,
+        stream: &mut S,
+    ) -> ParseResult<Option<(Self::Output, Consume)>> {
+        let Map(ref mut p, ref mut f) = *self;
+        if let Some((x, c)) = p.parse_lookahead_mut(stream)? {
+            Ok(Some((f(x), c)))
+        } else {
+            Ok(None)
+        }
+    }
+    fn emit_expectations_mut(&mut self, stream: &mut S) {
+        let Map(ref mut p, _) = *self;
+        p.emit_expectations_mut(stream);
+    }
+}
+
+impl<S, O, P, F> Parser<S> for Map<O, P, F>
+where
+    S: Stream<Item = P::Input>,
+    P: Parser<S>,
+    F: Fn(P::Output) -> O,
+{
+    fn parse_lookahead(&self, stream: &mut S) -> ParseResult<Option<(Self::Output, Consume)>> {
+        let Map(ref p, ref f) = *self;
+        if let Some((x, c)) = p.parse_lookahead(stream)? {
+            Ok(Some((f(x), c)))
+        } else {
+            Ok(None)
+        }
+    }
+    fn emit_expectations(&self, stream: &mut S) {
+        let Map(ref p, _) = *self;
+        p.emit_expectations(stream);
+    }
+}
+
 pub(crate) fn and_then<P0, P1, F>(p0: P0, f: F) -> AndThen<P0, P1, F>
 where
     P0: ParserBase,
