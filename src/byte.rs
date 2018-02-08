@@ -119,3 +119,45 @@ impl<F: Fn(char) -> bool, S: Stream<Item = u8> + ?Sized> Parser<S> for Char<F> {
         ParserOnce::parse_lookahead_once(char_once(&self.0), stream)
     }
 }
+
+pub fn alpha() -> Alpha {
+    Alpha(PhantomData)
+}
+
+pub struct Alpha(PhantomData<()>);
+
+impl ParserBase for Alpha {
+    type Input = u8;
+    type Output = char;
+}
+impl<S: Stream<Item = u8> + ?Sized> ParserOnce<S> for Alpha {
+    delegate_parser_once!(char(char::is_alphabetic));
+    fn emit_expectations(&self, _stream: &mut S) {
+        // TODO: "alphabetic character"
+    }
+}
+impl<S: Stream<Item = u8> + ?Sized> ParserMut<S> for Alpha {
+    delegate_parser_mut!(&mut char(char::is_alphabetic));
+}
+impl<S: Stream<Item = u8> + ?Sized> Parser<S> for Alpha {
+    delegate_parser!(&char(char::is_alphabetic));
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use stream::SliceStream;
+    use ParserIteratorBase;
+
+    #[test]
+    fn test_alpha() {
+        let p = alpha().many1().collect::<String>();
+        assert_eq!(p.parse(&mut SliceStream::new(b"hoge")).unwrap(), "hoge");
+        assert_eq!(
+            p.parse(&mut SliceStream::new(b"hoge fuga")).unwrap(),
+            "hoge"
+        );
+        assert!(p.parse(&mut SliceStream::new(b" hoge")).is_err());
+        assert!(p.parse(&mut SliceStream::new(b"")).is_err());
+    }
+}

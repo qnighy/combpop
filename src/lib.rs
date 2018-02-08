@@ -7,3 +7,4 @@ pub mod byte;
 
 pub use stream::Stream;
 pub use parser::{Consume, ParseError, ParseResult, Parser, ParserBase, ParserMut, ParserOnce};
+pub use iter::{ParserIterator, ParserIteratorBase, ParserIteratorMut};
