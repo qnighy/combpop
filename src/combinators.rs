@@ -82,6 +82,9 @@ pub struct Eof<I>(PhantomData<fn(I)>);
 impl<I> ParserBase for Eof<I> {
     type Input = I;
     type Output = ();
+    fn emptiable() -> bool {
+        true
+    }
 }
 impl<I, S: Stream<Item = I> + ?Sized> ParserOnce<S> for Eof<I> {
     fn parse_lookahead_once(self, stream: &mut S) -> ParseResult<Option<(Self::Output, Consume)>> {
@@ -148,11 +151,8 @@ where
 {
     type Input = P::Input;
     type Output = O;
-    fn emptiable() -> bool
-    where
-        Self: Sized,
-    {
-        false
+    fn emptiable() -> bool {
+        P::emptiable()
     }
 }
 
@@ -256,10 +256,7 @@ where
 {
     type Input = P0::Input;
     type Output = P1::Output;
-    fn emptiable() -> bool
-    where
-        Self: Sized,
-    {
+    fn emptiable() -> bool {
         P0::emptiable() && P1::emptiable()
     }
 }
@@ -367,10 +364,7 @@ pub struct Empty<I>(PhantomData<fn(I)>);
 impl<I> ParserBase for Empty<I> {
     type Input = I;
     type Output = ();
-    fn emptiable() -> bool
-    where
-        Self: Sized,
-    {
+    fn emptiable() -> bool {
         true
     }
 }
@@ -424,10 +418,7 @@ where
 {
     type Input = P0::Input;
     type Output = (P0::Output, P1::Output);
-    fn emptiable() -> bool
-    where
-        Self: Sized,
-    {
+    fn emptiable() -> bool {
         P0::emptiable() && P1::emptiable()
     }
 }
