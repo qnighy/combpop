@@ -1,12 +1,45 @@
 use {ParseError, ParseResult};
 
+/// `Stream` is a stream of tokens with lookahead/rollback ability.
+///
+/// # Semantics
+///
+/// A **stream** is thought to be a set of the following data:
+///
+/// - The sequence of **tokens** `S`
+/// - The monotone sequence of **marks** `M`
+/// - The **current position** `i`, which is not less than any marks
+/// - The **lookahead position** `j`, which is not less than the current position
+///
+/// The actual streams have to remember **only the part** of the tokens, due to the contract
+/// described in the `Stream::get` method below.
 pub trait Stream {
+    /// The type of the token. Note that `Stream::get` actually returns a *reference* to `I`.
     type Item;
+    /// Tries to push the lookahead position forward.
+    ///
+    /// - If `i + len <= j`, then it does nothing.
+    /// - If `i + len > j` and it hit an I/O error, then it returns `Err`.
+    /// - If `i + len > j` and it hit an EOF, then it returns `Err(ParseError::EOF)`.
+    /// - Otherwise, it updates `j` to `i + len` and returns `Ok`.
     fn lookahead(&mut self, len: usize) -> ParseResult<()>;
+    /// Retrieves the looked-ahead token.
+    ///
+    /// The caller must ensure that `i + idx < j`. Otherwise it may panic.
     fn get(&self, idx: usize) -> &Self::Item;
+    /// Advances the current position.
+    ///
+    /// The caller must ensure that `i + idx < j`. Otherwise it may panic.
     fn advance(&mut self, len: usize);
+    /// Pushes the current position to the mark stack `M`.
     fn mark(&mut self) -> StreamMark;
+    /// Pops `i` from the mark stack `M`.
+    ///
+    /// `pos` argument must match to the corresponding `Stream::mark` call.
     fn rollback(&mut self, pos: StreamMark);
+    /// Pops a value from the mark stack `M` and discard it.
+    ///
+    /// The mark stack `M` must not be empty.
     fn commit(&mut self);
 }
 

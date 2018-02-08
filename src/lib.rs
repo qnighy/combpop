@@ -1,3 +1,5 @@
+//! **Combpop** is a type-based parser combinator library.
+
 pub mod stream;
 #[macro_use]
 pub mod parser;
