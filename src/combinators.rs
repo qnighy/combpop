@@ -319,6 +319,52 @@ where
     }
 }
 
+pub fn empty<I>() -> Empty<I> {
+    Empty(PhantomData)
+}
+
+pub struct Empty<I>(PhantomData<fn(I)>);
+
+impl<I> ParserBase for Empty<I> {
+    type Input = I;
+    type Output = ();
+    fn emptiable() -> bool
+    where
+        Self: Sized,
+    {
+        true
+    }
+}
+
+impl<S, I> ParserOnce<S> for Empty<I>
+where
+    S: Stream<Item = I>,
+{
+    fn parse_lookahead_once(self, _: &mut S) -> ParseResult<Option<(Self::Output, Consume)>> {
+        Ok(Some(((), Consume::Empty)))
+    }
+}
+
+impl<S, I> ParserMut<S> for Empty<I>
+where
+    S: Stream<Item = I>,
+{
+    fn parse_lookahead_mut(&mut self, _: &mut S) -> ParseResult<Option<(Self::Output, Consume)>> {
+        Ok(Some(((), Consume::Empty)))
+    }
+    fn emit_expectations_mut(&mut self, _: &mut S) {}
+}
+
+impl<S, I> Parser<S> for Empty<I>
+where
+    S: Stream<Item = I>,
+{
+    fn parse_lookahead(&self, _: &mut S) -> ParseResult<Option<(Self::Output, Consume)>> {
+        Ok(Some(((), Consume::Empty)))
+    }
+    fn emit_expectations(&self, _: &mut S) {}
+}
+
 pub(crate) fn concat2<P0, P1>(p0: P0, p1: P1) -> Concat2<P0, P1>
 where
     P0: ParserBase,
