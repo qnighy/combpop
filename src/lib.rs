@@ -2,6 +2,7 @@ pub mod stream;
 #[macro_use]
 pub mod parser;
 pub mod combinators;
+pub mod iter;
 pub mod byte;
 
 pub use stream::Stream;

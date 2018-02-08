@@ -1,5 +1,6 @@
 use Stream;
 use combinators;
+use iter;
 
 #[derive(Debug)]
 pub enum ParseError {
@@ -132,6 +133,13 @@ pub trait ParserBase {
         P: ParserBase<Input = Self::Input, Output = Self::Output>,
     {
         combinators::choice2(self, p)
+    }
+
+    fn many1(self) -> iter::Many1<Self>
+    where
+        Self: Sized,
+    {
+        iter::many1(self)
     }
 }
 pub trait ParserOnce<S: Stream<Item = Self::Input> + ?Sized>: ParserBase {
