@@ -509,6 +509,113 @@ where
     }
 }
 
+pub fn fail<I, O>() -> Fail<I, O> {
+    Fail(PhantomData)
+}
+pub struct Fail<I, O>(PhantomData<fn(I) -> O>);
+impl<I, O> ParserBase for Fail<I, O> {
+    type Input = I;
+    type Output = O;
+    fn emptiable() -> bool {
+        false
+    }
+}
+impl<S: Stream<Item = I>, I, O> ParserOnce<S> for Fail<I, O> {
+    fn parse_lookahead_once(self, _: &mut S) -> ParseResult<Option<(Self::Output, Consume)>> {
+        Ok(None)
+    }
+}
+impl<S: Stream<Item = I>, I, O> ParserMut<S> for Fail<I, O> {
+    fn parse_lookahead_mut(&mut self, _: &mut S) -> ParseResult<Option<(Self::Output, Consume)>> {
+        Ok(None)
+    }
+    fn emit_expectations_mut(&mut self, _: &mut S) {}
+}
+impl<S: Stream<Item = I>, I, O> Parser<S> for Fail<I, O> {
+    fn parse_lookahead(&self, _: &mut S) -> ParseResult<Option<(Self::Output, Consume)>> {
+        Ok(None)
+    }
+    fn emit_expectations(&self, _: &mut S) {}
+}
+
+pub(crate) fn choice2<P0, P1>(p0: P0, p1: P1) -> Choice2<P0, P1>
+where
+    P0: ParserBase,
+    P1: ParserBase<Input = P0::Input, Output = P0::Output>,
+{
+    Choice2(p0, p1)
+}
+pub struct Choice2<P0, P1>(P0, P1)
+where
+    P0: ParserBase,
+    P1: ParserBase<Input = P0::Input, Output = P0::Output>;
+impl<P0, P1> ParserBase for Choice2<P0, P1>
+where
+    P0: ParserBase,
+    P1: ParserBase<Input = P0::Input, Output = P0::Output>,
+{
+    type Input = P0::Input;
+    type Output = P0::Output;
+    fn emptiable() -> bool {
+        P0::emptiable() || P1::emptiable()
+    }
+}
+impl<S: Stream<Item = P0::Input>, P0, P1> ParserOnce<S> for Choice2<P0, P1>
+where
+    P0: ParserOnce<S>,
+    P1: ParserOnce<S, Input = P0::Input, Output = P0::Output>,
+{
+    fn parse_lookahead_once(self, stream: &mut S) -> ParseResult<Option<(Self::Output, Consume)>> {
+        let Choice2(p0, p1) = self;
+        if let Some((x, c)) = p0.parse_lookahead_once(stream)? {
+            Ok(Some((x, c)))
+        } else {
+            p1.parse_lookahead_once(stream)
+        }
+    }
+}
+impl<S: Stream<Item = P0::Input>, P0, P1> ParserMut<S> for Choice2<P0, P1>
+where
+    P0: ParserMut<S>,
+    P1: ParserMut<S, Input = P0::Input, Output = P0::Output>,
+{
+    fn parse_lookahead_mut(
+        &mut self,
+        stream: &mut S,
+    ) -> ParseResult<Option<(Self::Output, Consume)>> {
+        let Choice2(ref mut p0, ref mut p1) = *self;
+        if let Some((x, c)) = p0.parse_lookahead_mut(stream)? {
+            Ok(Some((x, c)))
+        } else {
+            p1.parse_lookahead_mut(stream)
+        }
+    }
+    fn emit_expectations_mut(&mut self, stream: &mut S) {
+        let Choice2(ref mut p0, ref mut p1) = *self;
+        p0.emit_expectations_mut(stream);
+        p1.emit_expectations_mut(stream);
+    }
+}
+impl<S: Stream<Item = P0::Input>, P0, P1> Parser<S> for Choice2<P0, P1>
+where
+    P0: Parser<S>,
+    P1: Parser<S, Input = P0::Input, Output = P0::Output>,
+{
+    fn parse_lookahead(&self, stream: &mut S) -> ParseResult<Option<(Self::Output, Consume)>> {
+        let Choice2(ref p0, ref p1) = *self;
+        if let Some((x, c)) = p0.parse_lookahead(stream)? {
+            Ok(Some((x, c)))
+        } else {
+            p1.parse_lookahead(stream)
+        }
+    }
+    fn emit_expectations(&self, stream: &mut S) {
+        let Choice2(ref p0, ref p1) = *self;
+        p0.emit_expectations(stream);
+        p1.emit_expectations(stream);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -125,6 +125,14 @@ pub trait ParserBase {
     {
         combinators::concat2(self, p)
     }
+
+    fn or<P>(self, p: P) -> combinators::Choice2<Self, P>
+    where
+        Self: Sized,
+        P: ParserBase<Input = Self::Input, Output = Self::Output>,
+    {
+        combinators::choice2(self, p)
+    }
 }
 pub trait ParserOnce<S: Stream<Item = Self::Input> + ?Sized>: ParserBase {
     fn parse_lookahead_once(self, stream: &mut S) -> ParseResult<Option<(Self::Output, Consume)>>
