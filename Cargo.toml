@@ -8,7 +8,7 @@ readme = "README.md"
 keywords = ["parser", "parsing", "combinators", "ll"]
 categories = ["parsing"]
 license = "Apache-2.0/MIT"
-version = "0.0.2"
+version = "0.0.3"
 authors = ["Masaki Hara <ackie.h.gmai@gmail.com>"]
 
 [dependencies]

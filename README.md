@@ -10,3 +10,4 @@ Current Status
 
 - Still in a design phase
 - There are example `Stream` and `Parser` implementations, but the interfaces are still unstable.
+- A simple parser for `\w+` works now.
