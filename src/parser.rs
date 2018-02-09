@@ -188,6 +188,24 @@ pub trait ParserBase {
     {
         iter::many1(self)
     }
+
+    /// Equivalent to `self.concat(p).map(|(_, y)| y)`.
+    fn skip_left<P>(self, p: P) -> combinators::SkipLeft<Self, P>
+    where
+        Self: Sized,
+        P: ParserBase<Input = Self::Input>,
+    {
+        combinators::skip_left(self, p)
+    }
+
+    /// Equivalent to `self.concat(p).map(|(x, _)| x)`.
+    fn skip_right<P>(self, p: P) -> combinators::SkipRight<Self, P>
+    where
+        Self: Sized,
+        P: ParserBase<Input = Self::Input>,
+    {
+        combinators::skip_right(self, p)
+    }
 }
 pub trait ParserOnce<S: Stream<Item = Self::Input> + ?Sized>: ParserBase {
     fn parse_lookahead_once(self, stream: &mut S) -> ParseResult<Option<(Self::Output, Consume)>>

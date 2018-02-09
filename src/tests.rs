@@ -32,11 +32,10 @@ pub mod json {
                 .or(byte::char(|x| x == 'n').map(|_| '\n'))
                 .or(byte::char(|x| x == 'r').map(|_| '\r'))
                 .or(byte::char(|x| x == 't').map(|_| '\t'));
-            let escaped = byte::char(|x| x == '\\').concat(escaped).map(|(_, x)| x);
+            let escaped = byte::char(|x| x == '\\').skip_left(escaped);
             byte::char(|x| x == '"')
-                .concat(escaped.or(byte::char(|x| x != '"')).many().collect::<String>())
-                .concat(byte::char(|x| x == '"'))
-                .map(|((_, x), _)| x)
+                .skip_left(escaped.or(byte::char(|x| x != '"')).many().collect::<String>())
+                .skip_right(byte::char(|x| x == '"'))
         }
     }
 
