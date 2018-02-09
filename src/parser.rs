@@ -19,6 +19,18 @@ impl ParseError {
 
 pub type ParseResult<T> = Result<T, ParseError>;
 
+/// A flag to indicate whether a parser consumed a token or not.
+///
+/// # Example
+///
+/// ```
+/// # extern crate combpop;
+/// # use combpop::Consume;
+/// # fn main() {
+/// assert_eq!(Consume::Empty | Consume::Consumed, Consume::Consumed);
+/// assert_eq!(Consume::Empty & Consume::Consumed, Consume::Empty);
+/// # }
+/// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Consume {
     Consumed,
@@ -58,9 +70,16 @@ impl ::std::ops::BitOrAssign for Consume {
     }
 }
 
+/// Stream-independent properties of parsers and parser-building methods.
+///
+/// See `Parser` for the actual parsing functionality. See `combinators`, `iter`, and `bytes` for
+/// other parser-building functions.
 pub trait ParserBase {
+    /// The input type of the parser. `u8` for byte-eating parsers.
     type Input;
+    /// The output type which this monadic parser produces.
     type Output;
+    /// Whether the parser "usually" accepts the empty sequence. Only used in `emit_expectations`.
     fn emptiable() -> bool
     where
         Self: Sized,
@@ -68,6 +87,8 @@ pub trait ParserBase {
         false
     }
 
+    /// Converts a semantic value after parsing. Similar to `ParserBase::map`, but accepts `FnOnce`
+    /// closures.
     fn map_once<O, F>(self, f: F) -> combinators::Map<O, Self, F>
     where
         Self: Sized,
@@ -76,6 +97,8 @@ pub trait ParserBase {
         combinators::map_once(self, f)
     }
 
+    /// Converts a semantic value after parsing. Similar to `ParserBase::map`, but accepts `FnMut`
+    /// closures.
     fn map_mut<O, F>(self, f: F) -> combinators::Map<O, Self, F>
     where
         Self: Sized,
@@ -84,6 +107,7 @@ pub trait ParserBase {
         combinators::map_mut(self, f)
     }
 
+    /// Converts a semantic value after parsing.
     fn map<O, F>(self, f: F) -> combinators::Map<O, Self, F>
     where
         Self: Sized,
@@ -92,6 +116,8 @@ pub trait ParserBase {
         combinators::map(self, f)
     }
 
+    /// Monadic operator: run another parser `f(x)` after parsing. Similar to
+    /// `ParserBase::and_then`, but accepts `FnOnce` closures.
     fn and_then_once<P, F>(self, f: F) -> combinators::AndThen<Self, P, F>
     where
         Self: Sized,
@@ -101,6 +127,8 @@ pub trait ParserBase {
         combinators::and_then_once(self, f)
     }
 
+    /// Monadic operator: run another parser `f(x)` after parsing. Similar to
+    /// `ParserBase::and_then`, but accepts `FnMut` closures.
     fn and_then_mut<P, F>(self, f: F) -> combinators::AndThen<Self, P, F>
     where
         Self: Sized,
@@ -110,6 +138,13 @@ pub trait ParserBase {
         combinators::and_then_mut(self, f)
     }
 
+    /// Monadic operator: run another parser `f(x)` after parsing.
+    ///
+    /// # Restrictions
+    ///
+    /// Applicative construction (`concat` + `map`) is recommended than `and_then`. Since the
+    /// value-dependency of the monadic construction, it may prevent useful optimizations. For
+    /// example, `AndThen::emit_expectations` cannot emit expectations from the latter parser.
     fn and_then<P, F>(self, f: F) -> combinators::AndThen<Self, P, F>
     where
         Self: Sized,
@@ -119,6 +154,8 @@ pub trait ParserBase {
         combinators::and_then(self, f)
     }
 
+    /// Applicative operator: run another parser `p` after parsing. The result is a pair of the
+    /// result of the parsers.
     fn concat<P>(self, p: P) -> combinators::Concat2<Self, P>
     where
         Self: Sized,
@@ -127,6 +164,7 @@ pub trait ParserBase {
         combinators::concat2(self, p)
     }
 
+    /// If the parser failed without consumption, try another parser.
     fn or<P>(self, p: P) -> combinators::Choice2<Self, P>
     where
         Self: Sized,
@@ -135,6 +173,7 @@ pub trait ParserBase {
         combinators::choice2(self, p)
     }
 
+    /// Returns a `ParserIteratorBase` that collects one or more objects from this parser.
     fn many1(self) -> iter::Many1<Self>
     where
         Self: Sized,
