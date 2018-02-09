@@ -12,3 +12,4 @@ version = "0.0.4"
 authors = ["Masaki Hara <ackie.h.gmai@gmail.com>"]
 
 [dependencies]
+either = "1.4.0"

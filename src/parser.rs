@@ -1,3 +1,4 @@
+use either::Either;
 use Stream;
 use combinators;
 use iter;
@@ -243,6 +244,63 @@ pub trait Parser<S: Stream<Item = Self::Input> + ?Sized>: ParserMut<S> {
         }
     }
     fn parse_lookahead(&self, stream: &mut S) -> ParseResult<Option<(Self::Output, Consume)>>;
+}
+
+impl<L, R> ParserBase for Either<L, R>
+where
+    L: ParserBase,
+    R: ParserBase<Input = L::Input, Output = L::Output>,
+{
+    type Input = L::Input;
+    type Output = R::Output;
+    fn emptiable() -> bool {
+        L::emptiable() || R::emptiable()
+    }
+}
+impl<L, R, S: Stream<Item = L::Input>> ParserOnce<S> for Either<L, R>
+where
+    L: ParserOnce<S>,
+    R: ParserOnce<S, Input = L::Input, Output = L::Output>,
+{
+    fn parse_lookahead_once(self, stream: &mut S) -> ParseResult<Option<(Self::Output, Consume)>> {
+        match self {
+            Either::Left(inner) => inner.parse_lookahead_once(stream),
+            Either::Right(inner) => inner.parse_lookahead_once(stream),
+        }
+    }
+    fn emit_expectations(&self, stream: &mut S) {
+        match *self {
+            Either::Left(ref inner) => inner.emit_expectations(stream),
+            Either::Right(ref inner) => inner.emit_expectations(stream),
+        }
+    }
+}
+impl<L, R, S: Stream<Item = L::Input>> ParserMut<S> for Either<L, R>
+where
+    L: ParserMut<S>,
+    R: ParserMut<S, Input = L::Input, Output = L::Output>,
+{
+    fn parse_lookahead_mut(
+        &mut self,
+        stream: &mut S,
+    ) -> ParseResult<Option<(Self::Output, Consume)>> {
+        match *self {
+            Either::Left(ref mut inner) => inner.parse_lookahead_mut(stream),
+            Either::Right(ref mut inner) => inner.parse_lookahead_mut(stream),
+        }
+    }
+}
+impl<L, R, S: Stream<Item = L::Input>> Parser<S> for Either<L, R>
+where
+    L: Parser<S>,
+    R: Parser<S, Input = L::Input, Output = L::Output>,
+{
+    fn parse_lookahead(&self, stream: &mut S) -> ParseResult<Option<(Self::Output, Consume)>> {
+        match *self {
+            Either::Left(ref inner) => inner.parse_lookahead(stream),
+            Either::Right(ref inner) => inner.parse_lookahead(stream),
+        }
+    }
 }
 
 macro_rules! delegate_parser_once {
