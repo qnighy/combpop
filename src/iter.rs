@@ -39,6 +39,62 @@ pub trait ParserIterator<S: Stream<Item = Self::Input> + ?Sized>
     ) -> ParseResult<Option<(Option<Self::Element>, Consume)>>;
 }
 
+pub(crate) fn many<P: ParserBase>(p: P) -> Many<P> {
+    Many(p)
+}
+pub struct Many<P: ParserBase>(P);
+impl<P> ParserIteratorBase for Many<P>
+where
+    P: ParserBase,
+{
+    type Input = P::Input;
+    type Element = P::Output;
+    fn emptiable() -> bool {
+        P::emptiable()
+    }
+}
+impl<S, P> ParserIteratorMut<S> for Many<P>
+where
+    S: Stream<Item = P::Input> + ?Sized,
+    P: ParserMut<S>,
+{
+    type State = ();
+    fn begin(&self) -> () {
+        ()
+    }
+    fn next_mut(
+        &mut self,
+        stream: &mut S,
+        _: &mut Self::State,
+    ) -> ParseResult<Option<(Option<Self::Element>, Consume)>> {
+        if let Some((x, c)) = self.0.parse_lookahead_mut(stream)? {
+            Ok(Some((Some(x), c)))
+        } else {
+            Ok(Some((None, Consume::Empty)))
+        }
+    }
+    fn emit_expectations(&self, stream: &mut S) {
+        self.0.emit_expectations(stream);
+    }
+}
+impl<S, P> ParserIterator<S> for Many<P>
+where
+    S: Stream<Item = P::Input> + ?Sized,
+    P: Parser<S>,
+{
+    fn next(
+        &self,
+        stream: &mut S,
+        _: &mut Self::State,
+    ) -> ParseResult<Option<(Option<Self::Element>, Consume)>> {
+        if let Some((x, c)) = self.0.parse_lookahead(stream)? {
+            Ok(Some((Some(x), c)))
+        } else {
+            Ok(Some((None, Consume::Empty)))
+        }
+    }
+}
+
 pub(crate) fn many1<P: ParserBase>(p: P) -> Many1<P> {
     Many1(p)
 }

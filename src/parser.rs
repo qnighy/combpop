@@ -173,6 +173,14 @@ pub trait ParserBase {
         combinators::choice2(self, p)
     }
 
+    /// Returns a `ParserIteratorBase` that collects zero or more objects from this parser.
+    fn many(self) -> iter::Many<Self>
+    where
+        Self: Sized,
+    {
+        iter::many(self)
+    }
+
     /// Returns a `ParserIteratorBase` that collects one or more objects from this parser.
     fn many1(self) -> iter::Many1<Self>
     where

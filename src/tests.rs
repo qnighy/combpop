@@ -33,9 +33,8 @@ pub mod json {
                 .or(byte::char(|x| x == 'r').map(|_| '\r'))
                 .or(byte::char(|x| x == 't').map(|_| '\t'));
             let escaped = byte::char(|x| x == '\\').concat(escaped).map(|(_, x)| x);
-            // TODO: many instead of many1
             byte::char(|x| x == '"')
-                .concat(escaped.or(byte::char(|x| x != '"')).many1().collect::<String>())
+                .concat(escaped.or(byte::char(|x| x != '"')).many().collect::<String>())
                 .concat(byte::char(|x| x == '"'))
                 .map(|((_, x), _)| x)
         }
@@ -57,6 +56,7 @@ pub mod json {
             p.parse(&mut SliceStream::new(b"\"ho\\rge\" ")).unwrap(),
             "ho\rge"
         );
+        assert_eq!(p.parse(&mut SliceStream::new(b"\"\"")).unwrap(), "");
         assert!(p.parse(&mut SliceStream::new(b"\"ho\\rge")).is_err());
         assert!(p.parse(&mut SliceStream::new(b" \"hoge\"")).is_err());
     }
