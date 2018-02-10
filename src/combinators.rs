@@ -4,35 +4,36 @@ use {Consume, ParseError, ParseResult, Parser, ParserBase, ParserMut, ParserOnce
 parser_alias! {
     #[struct = AnyToken]
     #[marker = fn(I)]
-    #[type_alias = Token<I, fn(&I) -> bool>]
+    #[type_alias = TokenIf<I, fn(&I) -> bool>]
     pub fn any_token<I>() -> impl Parser<Input = I, Output = I>
     where [
         I: [Clone],
     ] [] []
     {
-        token(|_| true)
+        token_if(|_| true)
     }
 }
 
-pub fn token_once<I: Clone, F: FnOnce(&I) -> bool>(f: F) -> Token<I, F> {
-    Token(f, PhantomData)
+pub fn token_if_once<I: Clone, F: FnOnce(&I) -> bool>(f: F) -> TokenIf<I, F> {
+    TokenIf(f, PhantomData)
 }
 
-pub fn token_mut<I: Clone, F: FnMut(&I) -> bool>(f: F) -> Token<I, F> {
-    Token(f, PhantomData)
+pub fn token_if_mut<I: Clone, F: FnMut(&I) -> bool>(f: F) -> TokenIf<I, F> {
+    TokenIf(f, PhantomData)
 }
 
-pub fn token<I: Clone, F: Fn(&I) -> bool>(f: F) -> Token<I, F> {
-    Token(f, PhantomData)
+pub fn token_if<I: Clone, F: Fn(&I) -> bool>(f: F) -> TokenIf<I, F> {
+    TokenIf(f, PhantomData)
 }
 
-pub struct Token<I: Clone, F: FnOnce(&I) -> bool>(F, PhantomData<fn(I)>);
+pub struct TokenIf<I: Clone, F: FnOnce(&I) -> bool>(F, PhantomData<fn(I)>);
 
-impl<I: Clone, F: FnOnce(&I) -> bool> ParserBase for Token<I, F> {
+impl<I: Clone, F: FnOnce(&I) -> bool> ParserBase for TokenIf<I, F> {
     type Input = I;
     type Output = I;
 }
-impl<I: Clone, S: Stream<Item = I> + ?Sized, F: FnOnce(&I) -> bool> ParserOnce<S> for Token<I, F> {
+impl<I: Clone, S: Stream<Item = I> + ?Sized, F: FnOnce(&I) -> bool> ParserOnce<S>
+    for TokenIf<I, F> {
     fn parse_lookahead_once(self, stream: &mut S) -> ParseResult<Option<(I, Consume)>> {
         match stream.lookahead(1) {
             Ok(()) => {
@@ -52,14 +53,14 @@ impl<I: Clone, S: Stream<Item = I> + ?Sized, F: FnOnce(&I) -> bool> ParserOnce<S
         // TODO: "a token"
     }
 }
-impl<I: Clone, S: Stream<Item = I> + ?Sized, F: FnMut(&I) -> bool> ParserMut<S> for Token<I, F> {
+impl<I: Clone, S: Stream<Item = I> + ?Sized, F: FnMut(&I) -> bool> ParserMut<S> for TokenIf<I, F> {
     fn parse_lookahead_mut(&mut self, stream: &mut S) -> ParseResult<Option<(I, Consume)>> {
-        ParserOnce::parse_lookahead_once(Token(&mut self.0, PhantomData), stream)
+        ParserOnce::parse_lookahead_once(TokenIf(&mut self.0, PhantomData), stream)
     }
 }
-impl<I: Clone, S: Stream<Item = I> + ?Sized, F: Fn(&I) -> bool> Parser<S> for Token<I, F> {
+impl<I: Clone, S: Stream<Item = I> + ?Sized, F: Fn(&I) -> bool> Parser<S> for TokenIf<I, F> {
     fn parse_lookahead(&self, stream: &mut S) -> ParseResult<Option<(I, Consume)>> {
-        ParserOnce::parse_lookahead_once(Token(&self.0, PhantomData), stream)
+        ParserOnce::parse_lookahead_once(TokenIf(&self.0, PhantomData), stream)
     }
 }
 

@@ -16,33 +16,33 @@ parser_alias! {
 parser_alias! {
     #[struct = AnyChar]
     #[marker = ()]
-    #[type_alias = Char<fn(char) -> bool>]
+    #[type_alias = CharIf<fn(char) -> bool>]
     pub fn any_char<>() -> impl Parser<Input = u8, Output = char>
     where [] [] []
     {
-        char(|_| true)
+        char_if(|_| true)
     }
 }
 
-pub fn char_once<F: FnOnce(char) -> bool>(f: F) -> Char<F> {
-    Char(f)
+pub fn char_if_once<F: FnOnce(char) -> bool>(f: F) -> CharIf<F> {
+    CharIf(f)
 }
 
-pub fn char_mut<F: FnMut(char) -> bool>(f: F) -> Char<F> {
-    Char(f)
+pub fn char_if_mut<F: FnMut(char) -> bool>(f: F) -> CharIf<F> {
+    CharIf(f)
 }
 
-pub fn char<F: Fn(char) -> bool>(f: F) -> Char<F> {
-    Char(f)
+pub fn char_if<F: Fn(char) -> bool>(f: F) -> CharIf<F> {
+    CharIf(f)
 }
 
-pub struct Char<F: FnOnce(char) -> bool>(F);
+pub struct CharIf<F: FnOnce(char) -> bool>(F);
 
-impl<F: FnOnce(char) -> bool> ParserBase for Char<F> {
+impl<F: FnOnce(char) -> bool> ParserBase for CharIf<F> {
     type Input = u8;
     type Output = char;
 }
-impl<F: FnOnce(char) -> bool, S: Stream<Item = u8> + ?Sized> ParserOnce<S> for Char<F> {
+impl<F: FnOnce(char) -> bool, S: Stream<Item = u8> + ?Sized> ParserOnce<S> for CharIf<F> {
     fn parse_lookahead_once(self, stream: &mut S) -> ParseResult<Option<(char, Consume)>> {
         let b0 = match stream.lookahead(1) {
             Ok(()) => *stream.get(0),
@@ -103,28 +103,28 @@ impl<F: FnOnce(char) -> bool, S: Stream<Item = u8> + ?Sized> ParserOnce<S> for C
         // TODO: "a char"
     }
 }
-impl<F: FnMut(char) -> bool, S: Stream<Item = u8> + ?Sized> ParserMut<S> for Char<F> {
+impl<F: FnMut(char) -> bool, S: Stream<Item = u8> + ?Sized> ParserMut<S> for CharIf<F> {
     fn parse_lookahead_mut(
         &mut self,
         stream: &mut S,
     ) -> ParseResult<Option<(Self::Output, Consume)>> {
-        ParserOnce::parse_lookahead_once(Char(&mut self.0), stream)
+        ParserOnce::parse_lookahead_once(CharIf(&mut self.0), stream)
     }
 }
-impl<F: Fn(char) -> bool, S: Stream<Item = u8> + ?Sized> Parser<S> for Char<F> {
+impl<F: Fn(char) -> bool, S: Stream<Item = u8> + ?Sized> Parser<S> for CharIf<F> {
     fn parse_lookahead(&self, stream: &mut S) -> ParseResult<Option<(Self::Output, Consume)>> {
-        ParserOnce::parse_lookahead_once(Char(&self.0), stream)
+        ParserOnce::parse_lookahead_once(CharIf(&self.0), stream)
     }
 }
 
 parser_alias! {
     #[struct = Alpha]
     #[marker = ()]
-    #[type_alias = Char<fn(char) -> bool>]
+    #[type_alias = CharIf<fn(char) -> bool>]
     pub fn alpha<>() -> impl Parser<Input = u8, Output = char>
     where [] [] []
     {
-        char(char::is_alphabetic)
+        char_if(char::is_alphabetic)
     }
 }
 
