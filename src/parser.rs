@@ -414,14 +414,108 @@ where
     }
 }
 
-macro_rules! delegate_parser_once {
-    ($this:expr) => {
-        fn parse_lookahead_once(self, stream: &mut S)
-            -> ParseResult<Option<(Self::Output, Consume)>>
-        where
-            Self: Sized,
+macro_rules! parser_alias {
+    (
+        #[struct = $struct:ident]
+        #[marker = $marker_ty:ty]
+        #[type_alias = $type_alias:ty]
+        pub fn $name:ident <$($generics:ident),*> ($($arg:ident : $arg_ty:ty),*)
+        -> impl Parser<Input = $Input:ty, Output = $Output:ty>
+        where [$($where_name:ident : [$($where_bound:tt)*],)*]
+        [$($where_parser_name:ident :
+           ParserBase<$($where_parser_assoc:ident = $where_parser_assoc_val:ty),*>,)*]
+        [$($where_fn_name:ident : FnOnce($($where_fn_args:ty),*) -> $where_fn_output:ty,)*]
         {
-            ParserOnce::parse_lookahead_once($this, stream)
+            $($body:tt)*
         }
-    }
+    ) => {
+        pub fn $name<$($generics),*>($($arg : $arg_ty),*) -> $struct<$($generics),*>
+        where
+            $($where_name : $($where_bound)*,)*
+            $($where_parser_name : ParserBase<$($where_parser_assoc = $where_parser_assoc_val),*>,)*
+            $($where_fn_name : FnOnce($($where_fn_args),*) -> $where_fn_output,)*
+        {
+            $struct {
+                $($arg,)*
+                _marker: ::std::marker::PhantomData,
+            }
+        }
+        pub struct $struct<$($generics),*>
+        where
+            $($where_name : $($where_bound)*,)*
+            $($where_parser_name : ParserBase<$($where_parser_assoc = $where_parser_assoc_val),*>,)*
+            $($where_fn_name : FnOnce($($where_fn_args),*) -> $where_fn_output,)*
+        {
+            $($arg : $arg_ty,)*
+            _marker: ::std::marker::PhantomData<$marker_ty>
+        }
+        impl<$($generics),*> ParserBase for $struct<$($generics),*>
+        where
+            $($where_name : $($where_bound)*,)*
+            $($where_parser_name : ParserBase<$($where_parser_assoc = $where_parser_assoc_val),*>,)*
+            $($where_fn_name : FnOnce($($where_fn_args),*) -> $where_fn_output,)*
+        {
+            type Input = $Input;
+            type Output = $Output;
+            fn emptiable() -> bool {
+                <$type_alias>::emptiable()
+            }
+        }
+        impl<$($generics,)* S> ParserOnce<S> for $struct<$($generics),*>
+        where
+            $($where_name : $($where_bound)*,)*
+            $($where_parser_name :
+              ParserOnce<S, $($where_parser_assoc = $where_parser_assoc_val),*>,)*
+            $($where_fn_name : FnOnce($($where_fn_args),*) -> $where_fn_output,)*
+            S : Stream<Item = Self::Input> + ?Sized,
+        {
+            fn parse_lookahead_once(
+                self,
+                stream: &mut S,
+            ) -> ParseResult<Option<(Self::Output, Consume)>> {
+                let $struct { $($arg,)* _marker: _ } = self;
+                let parser = {
+                    $($body)*
+                };
+                ParserOnce::parse_lookahead_once(parser, stream)
+            }
+            fn emit_expectations(&self, _stream: &mut S) {
+                // TODO
+            }
+        }
+        impl<$($generics,)* S> ParserMut<S> for $struct<$($generics),*>
+        where
+            $($where_name : $($where_bound)*,)*
+            $($where_parser_name :
+              ParserMut<S, $($where_parser_assoc = $where_parser_assoc_val),*>,)*
+            $($where_fn_name : FnMut($($where_fn_args),*) -> $where_fn_output,)*
+            S : Stream<Item = Self::Input> + ?Sized,
+        {
+            fn parse_lookahead_mut(
+                &mut self,
+                stream: &mut S,
+            ) -> ParseResult<Option<(Self::Output, Consume)>> {
+                let $struct { $(ref mut $arg,)* _marker: _ } = *self;
+                let this = $struct { $($arg,)* _marker: ::std::marker::PhantomData };
+                ParserOnce::parse_lookahead_once(this, stream)
+            }
+        }
+        impl<$($generics,)* S> Parser<S> for $struct<$($generics),*>
+        where
+            $($where_name : $($where_bound)*,)*
+            $($where_parser_name :
+              Parser<S, $($where_parser_assoc = $where_parser_assoc_val),*>,)*
+            $($where_fn_name : FnMut($($where_fn_args),*) -> $where_fn_output,)*
+            S : Stream<Item = Self::Input> + ?Sized,
+        {
+            fn parse_lookahead(
+                &self,
+                stream: &mut S,
+            ) -> ParseResult<Option<(Self::Output, Consume)>> {
+                let $struct { $(ref $arg,)* _marker: _ } = *self;
+                let this = $struct { $($arg,)* _marker: ::std::marker::PhantomData };
+                ParserOnce::parse_lookahead_once(this, stream)
+            }
+        }
+    };
 }

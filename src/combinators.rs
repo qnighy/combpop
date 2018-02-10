@@ -1,30 +1,16 @@
 use std::marker::PhantomData;
 use {Consume, ParseError, ParseResult, Parser, ParserBase, ParserMut, ParserOnce, Stream};
 
-pub fn any_token<I: Clone>() -> AnyToken<I> {
-    AnyToken(PhantomData)
-}
-
-pub struct AnyToken<I: Clone>(PhantomData<fn(I)>);
-
-impl<I: Clone> ParserBase for AnyToken<I> {
-    type Input = I;
-    type Output = I;
-}
-impl<I: Clone, S: Stream<Item = I> + ?Sized> ParserOnce<S> for AnyToken<I> {
-    delegate_parser_once!(token(|_| true));
-    fn emit_expectations(&self, _stream: &mut S) {
-        // TODO: "any token"
-    }
-}
-impl<I: Clone, S: Stream<Item = I> + ?Sized> ParserMut<S> for AnyToken<I> {
-    fn parse_lookahead_mut(&mut self, stream: &mut S) -> ParseResult<Option<(I, Consume)>> {
-        ParserOnce::parse_lookahead_once(AnyToken(PhantomData), stream)
-    }
-}
-impl<I: Clone, S: Stream<Item = I> + ?Sized> Parser<S> for AnyToken<I> {
-    fn parse_lookahead(&self, stream: &mut S) -> ParseResult<Option<(I, Consume)>> {
-        ParserOnce::parse_lookahead_once(AnyToken(PhantomData), stream)
+parser_alias! {
+    #[struct = AnyToken]
+    #[marker = fn(I)]
+    #[type_alias = Token<I, fn(&I) -> bool>]
+    pub fn any_token<I>() -> impl Parser<Input = I, Output = I>
+    where [
+        I: [Clone],
+    ] [] []
+    {
+        token(|_| true)
     }
 }
 
@@ -609,163 +595,32 @@ where
     }
 }
 
-pub(crate) fn skip_left<P0, P1>(p0: P0, p1: P1) -> SkipLeft<P0, P1>
-where
-    P0: ParserBase,
-    P1: ParserBase<Input = P0::Input>,
-{
-    SkipLeft(p0, p1)
-}
-
-pub struct SkipLeft<P0, P1>(P0, P1)
-where
-    P0: ParserBase,
-    P1: ParserBase<Input = P0::Input>;
-
-impl<P0, P1> ParserBase for SkipLeft<P0, P1>
-where
-    P0: ParserBase,
-    P1: ParserBase<Input = P0::Input>,
-{
-    type Input = P0::Input;
-    type Output = P1::Output;
-    fn emptiable() -> bool {
-        P0::emptiable() && P1::emptiable()
+parser_alias! {
+    #[struct = SkipLeft]
+    #[marker = ()]
+    #[type_alias = Map<P1::Output, Concat2<P0, P1>, fn((P0::Output, P1::Output)) -> P1::Output>]
+    pub fn skip_left<P0, P1>(p0: P0, p1: P1)
+        -> impl Parser<Input = P0::Input, Output = P1::Output>
+    where [] [
+        P0: ParserBase<>,
+        P1: ParserBase<Input = P0::Input>,
+    ] []
+    {
+        p0.concat(p1).map(|(_, y)| y)
     }
 }
-
-impl<S, P0, P1> ParserOnce<S> for SkipLeft<P0, P1>
-where
-    S: Stream<Item = P0::Input> + ?Sized,
-    P0: ParserOnce<S>,
-    P1: ParserOnce<S, Input = P0::Input>,
-{
-    fn parse_lookahead_once(self, stream: &mut S) -> ParseResult<Option<(Self::Output, Consume)>> {
-        let SkipLeft(p0, p1) = self;
-        let consumed = if let Some((_, c)) = p0.parse_lookahead_once(stream)? {
-            c
-        } else {
-            return Ok(None);
-        };
-        if let Some((y, c)) = p1.parse_lookahead_once(stream)? {
-            Ok(Some((y, consumed | c)))
-        } else if consumed == Consume::Empty {
-            Ok(None)
-        } else {
-            Err(ParseError::SyntaxError)
-        }
-    }
-    fn emit_expectations(&self, stream: &mut S) {
-        let SkipLeft(ref p0, ref p1) = *self;
-        p0.emit_expectations(stream);
-        if P0::emptiable() {
-            p1.emit_expectations(stream);
-        }
-    }
-}
-
-impl<S, P0, P1> ParserMut<S> for SkipLeft<P0, P1>
-where
-    S: Stream<Item = P0::Input> + ?Sized,
-    P0: ParserMut<S>,
-    P1: ParserMut<S, Input = P0::Input>,
-{
-    fn parse_lookahead_mut(
-        &mut self,
-        stream: &mut S,
-    ) -> ParseResult<Option<(Self::Output, Consume)>> {
-        ParserOnce::parse_lookahead_once(SkipLeft(&mut self.0, &mut self.1), stream)
-    }
-}
-
-impl<S, P0, P1> Parser<S> for SkipLeft<P0, P1>
-where
-    S: Stream<Item = P0::Input> + ?Sized,
-    P0: Parser<S>,
-    P1: Parser<S, Input = P0::Input>,
-{
-    fn parse_lookahead(&self, stream: &mut S) -> ParseResult<Option<(Self::Output, Consume)>> {
-        ParserOnce::parse_lookahead_once(SkipLeft(&self.0, &self.1), stream)
-    }
-}
-
-pub(crate) fn skip_right<P0, P1>(p0: P0, p1: P1) -> SkipRight<P0, P1>
-where
-    P0: ParserBase,
-    P1: ParserBase<Input = P0::Input>,
-{
-    SkipRight(p0, p1)
-}
-
-pub struct SkipRight<P0, P1>(P0, P1)
-where
-    P0: ParserBase,
-    P1: ParserBase<Input = P0::Input>;
-
-impl<P0, P1> ParserBase for SkipRight<P0, P1>
-where
-    P0: ParserBase,
-    P1: ParserBase<Input = P0::Input>,
-{
-    type Input = P0::Input;
-    type Output = P0::Output;
-    fn emptiable() -> bool {
-        P0::emptiable() && P1::emptiable()
-    }
-}
-
-impl<S, P0, P1> ParserOnce<S> for SkipRight<P0, P1>
-where
-    S: Stream<Item = P0::Input> + ?Sized,
-    P0: ParserOnce<S>,
-    P1: ParserOnce<S, Input = P0::Input>,
-{
-    fn parse_lookahead_once(self, stream: &mut S) -> ParseResult<Option<(Self::Output, Consume)>> {
-        let SkipRight(p0, p1) = self;
-        let (x, consumed) = if let Some((x, c)) = p0.parse_lookahead_once(stream)? {
-            (x, c)
-        } else {
-            return Ok(None);
-        };
-        if let Some((_, c)) = p1.parse_lookahead_once(stream)? {
-            Ok(Some((x, consumed | c)))
-        } else if consumed == Consume::Empty {
-            Ok(None)
-        } else {
-            Err(ParseError::SyntaxError)
-        }
-    }
-    fn emit_expectations(&self, stream: &mut S) {
-        let SkipRight(ref p0, ref p1) = *self;
-        p0.emit_expectations(stream);
-        if P0::emptiable() {
-            p1.emit_expectations(stream);
-        }
-    }
-}
-
-impl<S, P0, P1> ParserMut<S> for SkipRight<P0, P1>
-where
-    S: Stream<Item = P0::Input> + ?Sized,
-    P0: ParserMut<S>,
-    P1: ParserMut<S, Input = P0::Input>,
-{
-    fn parse_lookahead_mut(
-        &mut self,
-        stream: &mut S,
-    ) -> ParseResult<Option<(Self::Output, Consume)>> {
-        ParserOnce::parse_lookahead_once(SkipRight(&mut self.0, &mut self.1), stream)
-    }
-}
-
-impl<S, P0, P1> Parser<S> for SkipRight<P0, P1>
-where
-    S: Stream<Item = P0::Input> + ?Sized,
-    P0: Parser<S>,
-    P1: Parser<S, Input = P0::Input>,
-{
-    fn parse_lookahead(&self, stream: &mut S) -> ParseResult<Option<(Self::Output, Consume)>> {
-        ParserOnce::parse_lookahead_once(SkipRight(&self.0, &self.1), stream)
+parser_alias! {
+    #[struct = SkipRight]
+    #[marker = ()]
+    #[type_alias = Map<P0::Output, Concat2<P0, P1>, fn((P0::Output, P1::Output)) -> P0::Output>]
+    pub fn skip_right<P0, P1>(p0: P0, p1: P1)
+        -> impl Parser<Input = P0::Input, Output = P0::Output>
+    where [] [
+        P0: ParserBase<>,
+        P1: ParserBase<Input = P0::Input>,
+    ] []
+    {
+        p0.concat(p1).map(|(x, _)| x)
     }
 }
 

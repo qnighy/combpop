@@ -1,39 +1,26 @@
 use std::char;
-use std::marker::PhantomData;
 use {Consume, ParseError, ParseResult, Parser, ParserBase, ParserMut, ParserOnce, Stream};
 use combinators::{any_token, AnyToken};
 
-pub fn any_byte() -> AnyToken<u8> {
-    any_token()
-}
-
-pub fn any_char() -> AnyChar {
-    AnyChar(PhantomData)
-}
-
-pub struct AnyChar(PhantomData<()>);
-
-impl ParserBase for AnyChar {
-    type Input = u8;
-    type Output = char;
-}
-impl<S: Stream<Item = u8> + ?Sized> ParserOnce<S> for AnyChar {
-    delegate_parser_once!(char(|_| true));
-    fn emit_expectations(&self, _stream: &mut S) {
-        // TODO: "any char"
+parser_alias! {
+    #[struct = AnyByte]
+    #[marker = ()]
+    #[type_alias = AnyToken<u8>]
+    pub fn any_byte<>() -> impl Parser<Input = u8, Output = u8>
+    where [] [] []
+    {
+        any_token::<u8>()
     }
 }
-impl<S: Stream<Item = u8> + ?Sized> ParserMut<S> for AnyChar {
-    fn parse_lookahead_mut(
-        &mut self,
-        stream: &mut S,
-    ) -> ParseResult<Option<(Self::Output, Consume)>> {
-        ParserOnce::parse_lookahead_once(AnyChar(PhantomData), stream)
-    }
-}
-impl<S: Stream<Item = u8> + ?Sized> Parser<S> for AnyChar {
-    fn parse_lookahead(&self, stream: &mut S) -> ParseResult<Option<(Self::Output, Consume)>> {
-        ParserOnce::parse_lookahead_once(AnyChar(PhantomData), stream)
+
+parser_alias! {
+    #[struct = AnyChar]
+    #[marker = ()]
+    #[type_alias = Char<fn(char) -> bool>]
+    pub fn any_char<>() -> impl Parser<Input = u8, Output = char>
+    where [] [] []
+    {
+        char(|_| true)
     }
 }
 
@@ -130,33 +117,14 @@ impl<F: Fn(char) -> bool, S: Stream<Item = u8> + ?Sized> Parser<S> for Char<F> {
     }
 }
 
-pub fn alpha() -> Alpha {
-    Alpha(PhantomData)
-}
-
-pub struct Alpha(PhantomData<()>);
-
-impl ParserBase for Alpha {
-    type Input = u8;
-    type Output = char;
-}
-impl<S: Stream<Item = u8> + ?Sized> ParserOnce<S> for Alpha {
-    delegate_parser_once!(char(char::is_alphabetic));
-    fn emit_expectations(&self, _stream: &mut S) {
-        // TODO: "alphabetic character"
-    }
-}
-impl<S: Stream<Item = u8> + ?Sized> ParserMut<S> for Alpha {
-    fn parse_lookahead_mut(
-        &mut self,
-        stream: &mut S,
-    ) -> ParseResult<Option<(Self::Output, Consume)>> {
-        ParserOnce::parse_lookahead_once(Alpha(PhantomData), stream)
-    }
-}
-impl<S: Stream<Item = u8> + ?Sized> Parser<S> for Alpha {
-    fn parse_lookahead(&self, stream: &mut S) -> ParseResult<Option<(Self::Output, Consume)>> {
-        ParserOnce::parse_lookahead_once(Alpha(PhantomData), stream)
+parser_alias! {
+    #[struct = Alpha]
+    #[marker = ()]
+    #[type_alias = Char<fn(char) -> bool>]
+    pub fn alpha<>() -> impl Parser<Input = u8, Output = char>
+    where [] [] []
+    {
+        char(char::is_alphabetic)
     }
 }
 
