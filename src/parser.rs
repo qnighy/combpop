@@ -275,6 +275,88 @@ pub trait Parser<S: Stream<Item = Self::Input> + ?Sized>: ParserMut<S> {
     fn parse_lookahead(&self, stream: &mut S) -> ParseResult<Option<(Self::Output, Consume)>>;
 }
 
+impl<'a, P> ParserBase for &'a mut P
+where
+    P: ParserBase,
+{
+    type Input = P::Input;
+    type Output = P::Output;
+    fn emptiable() -> bool {
+        P::emptiable()
+    }
+}
+impl<'a, P, S: Stream<Item = P::Input> + ?Sized> ParserOnce<S> for &'a mut P
+where
+    P: ParserMut<S>,
+{
+    fn parse_lookahead_once(self, stream: &mut S) -> ParseResult<Option<(Self::Output, Consume)>> {
+        <P as ParserMut<S>>::parse_lookahead_mut(self, stream)
+    }
+    fn emit_expectations(&self, stream: &mut S) {
+        <P as ParserOnce<S>>::emit_expectations(&self, stream);
+    }
+}
+impl<'a, P, S: Stream<Item = P::Input> + ?Sized> ParserMut<S> for &'a mut P
+where
+    P: ParserMut<S>,
+{
+    fn parse_lookahead_mut(
+        &mut self,
+        stream: &mut S,
+    ) -> ParseResult<Option<(Self::Output, Consume)>> {
+        <P as ParserMut<S>>::parse_lookahead_mut(&mut **self, stream)
+    }
+}
+impl<'a, P, S: Stream<Item = P::Input> + ?Sized> Parser<S> for &'a mut P
+where
+    P: Parser<S>,
+{
+    fn parse_lookahead(&self, stream: &mut S) -> ParseResult<Option<(Self::Output, Consume)>> {
+        <P as Parser<S>>::parse_lookahead(&**self, stream)
+    }
+}
+
+impl<'a, P> ParserBase for &'a P
+where
+    P: ParserBase,
+{
+    type Input = P::Input;
+    type Output = P::Output;
+    fn emptiable() -> bool {
+        P::emptiable()
+    }
+}
+impl<'a, P, S: Stream<Item = P::Input> + ?Sized> ParserOnce<S> for &'a P
+where
+    P: Parser<S>,
+{
+    fn parse_lookahead_once(self, stream: &mut S) -> ParseResult<Option<(Self::Output, Consume)>> {
+        <P as Parser<S>>::parse_lookahead(self, stream)
+    }
+    fn emit_expectations(&self, stream: &mut S) {
+        <P as ParserOnce<S>>::emit_expectations(&self, stream);
+    }
+}
+impl<'a, P, S: Stream<Item = P::Input> + ?Sized> ParserMut<S> for &'a P
+where
+    P: Parser<S>,
+{
+    fn parse_lookahead_mut(
+        &mut self,
+        stream: &mut S,
+    ) -> ParseResult<Option<(Self::Output, Consume)>> {
+        <P as Parser<S>>::parse_lookahead(&**self, stream)
+    }
+}
+impl<'a, P, S: Stream<Item = P::Input> + ?Sized> Parser<S> for &'a P
+where
+    P: Parser<S>,
+{
+    fn parse_lookahead(&self, stream: &mut S) -> ParseResult<Option<(Self::Output, Consume)>> {
+        <P as Parser<S>>::parse_lookahead(&**self, stream)
+    }
+}
+
 impl<L, R> ParserBase for Either<L, R>
 where
     L: ParserBase,
@@ -340,34 +422,6 @@ macro_rules! delegate_parser_once {
             Self: Sized,
         {
             ParserOnce::parse_lookahead_once($this, stream)
-        }
-    }
-}
-macro_rules! delegate_parser_mut {
-    ($this:expr) => {
-        fn parse_mut(&mut self, stream: &mut S) -> ParseResult<Self::Output> {
-            ParserMut::parse_mut($this, stream)
-        }
-        fn parse_consume_mut(&mut self, stream: &mut S) -> ParseResult<(Self::Output, Consume)> {
-            ParserMut::parse_consume_mut($this, stream)
-        }
-        fn parse_lookahead_mut(&mut self, stream: &mut S)
-            -> ParseResult<Option<(Self::Output, Consume)>> {
-            ParserMut::parse_lookahead_mut($this, stream)
-        }
-    }
-}
-macro_rules! delegate_parser {
-    ($this:expr) => {
-        fn parse(&self, stream: &mut S) -> ParseResult<Self::Output> {
-            Parser::parse($this, stream)
-        }
-        fn parse_consume(&self, stream: &mut S) -> ParseResult<(Self::Output, Consume)> {
-            Parser::parse_consume($this, stream)
-        }
-        fn parse_lookahead(&self, stream: &mut S)
-            -> ParseResult<Option<(Self::Output, Consume)>> {
-            Parser::parse_lookahead($this, stream)
         }
     }
 }

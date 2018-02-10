@@ -24,10 +24,17 @@ impl<S: Stream<Item = u8> + ?Sized> ParserOnce<S> for AnyChar {
     }
 }
 impl<S: Stream<Item = u8> + ?Sized> ParserMut<S> for AnyChar {
-    delegate_parser_mut!(&mut char(|_| true));
+    fn parse_lookahead_mut(
+        &mut self,
+        stream: &mut S,
+    ) -> ParseResult<Option<(Self::Output, Consume)>> {
+        ParserOnce::parse_lookahead_once(AnyChar(PhantomData), stream)
+    }
 }
 impl<S: Stream<Item = u8> + ?Sized> Parser<S> for AnyChar {
-    delegate_parser!(&char(|_| true));
+    fn parse_lookahead(&self, stream: &mut S) -> ParseResult<Option<(Self::Output, Consume)>> {
+        ParserOnce::parse_lookahead_once(AnyChar(PhantomData), stream)
+    }
 }
 
 pub fn char_once<F: FnOnce(char) -> bool>(f: F) -> Char<F> {
@@ -110,13 +117,16 @@ impl<F: FnOnce(char) -> bool, S: Stream<Item = u8> + ?Sized> ParserOnce<S> for C
     }
 }
 impl<F: FnMut(char) -> bool, S: Stream<Item = u8> + ?Sized> ParserMut<S> for Char<F> {
-    fn parse_lookahead_mut(&mut self, stream: &mut S) -> ParseResult<Option<(char, Consume)>> {
-        ParserOnce::parse_lookahead_once(char_once(&mut self.0), stream)
+    fn parse_lookahead_mut(
+        &mut self,
+        stream: &mut S,
+    ) -> ParseResult<Option<(Self::Output, Consume)>> {
+        ParserOnce::parse_lookahead_once(Char(&mut self.0), stream)
     }
 }
 impl<F: Fn(char) -> bool, S: Stream<Item = u8> + ?Sized> Parser<S> for Char<F> {
-    fn parse_lookahead(&self, stream: &mut S) -> ParseResult<Option<(char, Consume)>> {
-        ParserOnce::parse_lookahead_once(char_once(&self.0), stream)
+    fn parse_lookahead(&self, stream: &mut S) -> ParseResult<Option<(Self::Output, Consume)>> {
+        ParserOnce::parse_lookahead_once(Char(&self.0), stream)
     }
 }
 
@@ -137,10 +147,17 @@ impl<S: Stream<Item = u8> + ?Sized> ParserOnce<S> for Alpha {
     }
 }
 impl<S: Stream<Item = u8> + ?Sized> ParserMut<S> for Alpha {
-    delegate_parser_mut!(&mut char(char::is_alphabetic));
+    fn parse_lookahead_mut(
+        &mut self,
+        stream: &mut S,
+    ) -> ParseResult<Option<(Self::Output, Consume)>> {
+        ParserOnce::parse_lookahead_once(Alpha(PhantomData), stream)
+    }
 }
 impl<S: Stream<Item = u8> + ?Sized> Parser<S> for Alpha {
-    delegate_parser!(&char(char::is_alphabetic));
+    fn parse_lookahead(&self, stream: &mut S) -> ParseResult<Option<(Self::Output, Consume)>> {
+        ParserOnce::parse_lookahead_once(Alpha(PhantomData), stream)
+    }
 }
 
 #[cfg(test)]
