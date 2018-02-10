@@ -587,6 +587,110 @@ where
     }
 }
 
+pub(crate) fn assert_once<P, F>(p: P, f: F) -> Assert<P, F>
+where
+    P: ParserBase,
+    F: FnOnce(&P::Output) -> bool,
+{
+    Assert(p, f)
+}
+pub(crate) fn assert_mut<P, F>(p: P, f: F) -> Assert<P, F>
+where
+    P: ParserBase,
+    F: FnMut(&P::Output) -> bool,
+{
+    Assert(p, f)
+}
+pub(crate) fn assert<P, F>(p: P, f: F) -> Assert<P, F>
+where
+    P: ParserBase,
+    F: Fn(&P::Output) -> bool,
+{
+    Assert(p, f)
+}
+pub struct Assert<P, F>(P, F)
+where
+    P: ParserBase,
+    F: FnOnce(&P::Output) -> bool;
+impl<P, F> ParserBase for Assert<P, F>
+where
+    P: ParserBase,
+    F: FnOnce(&P::Output) -> bool,
+{
+    type Input = P::Input;
+    type Output = P::Output;
+    fn emptiable() -> bool {
+        P::emptiable()
+    }
+}
+impl<S: Stream<Item = P::Input>, P, F> ParserOnce<S> for Assert<P, F>
+where
+    P: ParserOnce<S>,
+    F: FnOnce(&P::Output) -> bool,
+{
+    fn parse_lookahead_once(self, stream: &mut S) -> ParseResult<Option<(Self::Output, Consume)>> {
+        let Assert(p, f) = self;
+        if let Some((x, c)) = p.parse_lookahead_once(stream)? {
+            if f(&x) {
+                Ok(Some((x, c)))
+            } else if c == Consume::Empty {
+                Ok(None)
+            } else {
+                Err(ParseError::SyntaxError)
+            }
+        } else {
+            Ok(None)
+        }
+    }
+    fn emit_expectations(&self, stream: &mut S) {
+        let Assert(ref p, _) = *self;
+        p.emit_expectations(stream);
+    }
+}
+impl<S: Stream<Item = P::Input>, P, F> ParserMut<S> for Assert<P, F>
+where
+    P: ParserMut<S>,
+    F: FnMut(&P::Output) -> bool,
+{
+    fn parse_lookahead_mut(
+        &mut self,
+        stream: &mut S,
+    ) -> ParseResult<Option<(Self::Output, Consume)>> {
+        let Assert(ref mut p, ref mut f) = *self;
+        if let Some((x, c)) = p.parse_lookahead_mut(stream)? {
+            if f(&x) {
+                Ok(Some((x, c)))
+            } else if c == Consume::Empty {
+                Ok(None)
+            } else {
+                Err(ParseError::SyntaxError)
+            }
+        } else {
+            Ok(None)
+        }
+    }
+}
+impl<S: Stream<Item = P::Input>, P, F> Parser<S> for Assert<P, F>
+where
+    P: Parser<S>,
+    F: Fn(&P::Output) -> bool,
+{
+    fn parse_lookahead(&self, stream: &mut S) -> ParseResult<Option<(Self::Output, Consume)>> {
+        let Assert(ref p, ref f) = *self;
+        if let Some((x, c)) = p.parse_lookahead(stream)? {
+            if f(&x) {
+                Ok(Some((x, c)))
+            } else if c == Consume::Empty {
+                Ok(None)
+            } else {
+                Err(ParseError::SyntaxError)
+            }
+        } else {
+            Ok(None)
+        }
+    }
+}
+
 pub(crate) fn skip_left<P0, P1>(p0: P0, p1: P1) -> SkipLeft<P0, P1>
 where
     P0: ParserBase,

@@ -174,6 +174,35 @@ pub trait ParserBase {
         combinators::choice2(self, p)
     }
 
+    /// Rejects the result if the predicate is `false`. Similar to `ParserBase::assert`, but accepts
+    /// `FnOnce` closures.
+    fn assert_once<F>(self, f: F) -> combinators::Assert<Self, F>
+    where
+        Self: Sized,
+        F: FnOnce(&Self::Output) -> bool,
+    {
+        combinators::assert_once(self, f)
+    }
+
+    /// Rejects the result if the predicate is `false`. Similar to `ParserBase::assert`, but accepts
+    /// `FnMut` closures.
+    fn assert_mut<F>(self, f: F) -> combinators::Assert<Self, F>
+    where
+        Self: Sized,
+        F: FnMut(&Self::Output) -> bool,
+    {
+        combinators::assert_mut(self, f)
+    }
+
+    /// Rejects the result if the predicate is `false`.
+    fn assert<F>(self, f: F) -> combinators::Assert<Self, F>
+    where
+        Self: Sized,
+        F: Fn(&Self::Output) -> bool,
+    {
+        combinators::assert(self, f)
+    }
+
     /// Returns a `ParserIteratorBase` that collects zero or more objects from this parser.
     fn many(self) -> iter::Many<Self>
     where
