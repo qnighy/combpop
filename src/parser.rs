@@ -505,7 +505,7 @@ macro_rules! parser_alias {
             $($where_name : $($where_bound)*,)*
             $($where_parser_name :
               Parser<S, $($where_parser_assoc = $where_parser_assoc_val),*>,)*
-            $($where_fn_name : FnMut($($where_fn_args),*) -> $where_fn_output,)*
+            $($where_fn_name : Fn($($where_fn_args),*) -> $where_fn_output,)*
             S : Stream<Item = Self::Input> + ?Sized,
         {
             fn parse_lookahead(

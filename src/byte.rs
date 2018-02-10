@@ -1,6 +1,6 @@
 use std::char;
 use {Consume, ParseError, ParseResult, Parser, ParserBase, ParserMut, ParserOnce, Stream};
-use combinators::{any_token, AnyToken};
+use combinators::{any_token, token_if_once, AnyToken, TokenIf};
 
 parser_alias! {
     #[struct = AnyByte]
@@ -115,6 +115,31 @@ impl<F: Fn(char) -> bool, S: Stream<Item = u8> + ?Sized> Parser<S> for CharIf<F>
     fn parse_lookahead(&self, stream: &mut S) -> ParseResult<Option<(Self::Output, Consume)>> {
         ParserOnce::parse_lookahead_once(CharIf(&self.0), stream)
     }
+}
+
+parser_alias! {
+    #[struct = AsciiIf]
+    #[marker = ()]
+    #[type_alias = TokenIf<u8, fn(&u8) -> bool>]
+    pub fn ascii_if_once<F>(f: F) -> impl Parser<Input = u8, Output = u8>
+    where [] [] [
+        F: FnOnce(u8) -> bool,
+    ]
+    {
+        token_if_once(move |&b| b < 0x80 && f(b))
+    }
+}
+pub fn ascii_if_mut<F>(f: F) -> AsciiIf<F>
+where
+    F: FnMut(u8) -> bool,
+{
+    ascii_if_once(f)
+}
+pub fn ascii_if<F>(f: F) -> AsciiIf<F>
+where
+    F: Fn(u8) -> bool,
+{
+    ascii_if_once(f)
 }
 
 parser_alias! {

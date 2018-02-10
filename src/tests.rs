@@ -5,21 +5,21 @@ pub mod json {
     use ::*;
     use stream::SliceStream;
     use either::Either;
-    use byte::char_if;
+    use byte::{ascii_if, char_if};
     parser! {
         pub fn json_string() -> JsonString<Input = u8, Output = String> {
             let u16escape = || {
                 let hexchar = || {
-                    char_if(|x| '0' <= x && x <= '9').map(|x| x as u32 - 0x30)
-                        .or(char_if(|x| 'A' <= x && x <= 'F').map(|x| x as u32 - 0x41 + 10))
-                        .or(char_if(|x| 'a' <= x && x <= 'f').map(|x| x as u32 - 0x61 + 10))
+                    ascii_if(|x| b'0' <= x && x <= b'9').map(|x| (x - b'0') as u32)
+                        .or(ascii_if(|x| b'A' <= x && x <= b'F').map(|x| (x - b'A' + 10) as u32))
+                        .or(ascii_if(|x| b'a' <= x && x <= b'f').map(|x| (x - b'a' + 10) as u32))
                 };
-                char_if(|x| x == 'u')
+                ascii_if(|x| x == b'u')
+                .skip_left(hexchar())
                 .concat(hexchar())
                 .concat(hexchar())
                 .concat(hexchar())
-                .concat(hexchar())
-                .map(|((((_, x0), x1), x2), x3)| (x0 << 12) | (x1 << 8) | (x2 << 4) | x3)
+                .map(|(((x0, x1), x2), x3)| (x0 << 12) | (x1 << 8) | (x2 << 4) | x3)
             };
             let u16escape_2 = u16escape();
             let unicode_escape = u16escape_2
@@ -27,7 +27,7 @@ pub mod json {
                 .and_then(move |x| {
                     if 0xD800 <= x && x < 0xDC00 {
                         Either::Left(
-                            char_if(|x| x == '\\')
+                            ascii_if(|x| x == b'\\')
                                 .skip_left(u16escape())
                                 .assert(|&y| 0xDC00 <= y && y < 0xE000)
                                 .map(move |y| (x - 0xD800) * 0x400 + (y - 0xDC00) + 0x10000)
@@ -37,18 +37,18 @@ pub mod json {
                     }
                 });
             let escaped =
-                char_if(|x| x == '"' || x == '\\' || x == '/')
-                .or(char_if(|x| x == 'b').map(|_| '\x08'))
-                .or(char_if(|x| x == 'f').map(|_| '\x0C'))
-                .or(char_if(|x| x == 'n').map(|_| '\n'))
-                .or(char_if(|x| x == 'r').map(|_| '\r'))
-                .or(char_if(|x| x == 't').map(|_| '\t'))
+                ascii_if(|x| x == b'"' || x == b'\\' || x == b'/').map(|x| x as char)
+                .or(ascii_if(|x| x == b'b').map(|_| '\x08'))
+                .or(ascii_if(|x| x == b'f').map(|_| '\x0C'))
+                .or(ascii_if(|x| x == b'n').map(|_| '\n'))
+                .or(ascii_if(|x| x == b'r').map(|_| '\r'))
+                .or(ascii_if(|x| x == b't').map(|_| '\t'))
                 .or(unicode_escape.map(|x| unsafe { ::std::char::from_u32_unchecked(x) }));
-            let escaped = char_if(|x| x == '\\').skip_left(escaped);
+            let escaped = ascii_if(|x| x == b'\\').skip_left(escaped);
             let unescaped = char_if(|x| x >= ' ' && x != '"');
-            char_if(|x| x == '"')
+            ascii_if(|x| x == b'"')
                 .skip_left(escaped.or(unescaped).many().collect::<String>())
-                .skip_right(char_if(|x| x == '"'))
+                .skip_right(ascii_if(|x| x == b'"'))
         }
     }
 
